@@ -1,0 +1,812 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  GESTOR
+  RESPONSAVEL
+  VISUALIZADOR
+}
+
+enum ProjectStatus {
+  PLANEJAMENTO
+  EM_ANDAMENTO
+  PAUSADA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum StageStatus {
+  NAO_INICIADA
+  EM_ANDAMENTO
+  PAUSADA
+  CONCLUIDA
+  ATRASADA
+}
+
+enum ServiceStatus {
+  NAO_INICIADO
+  EM_ANDAMENTO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum TaskStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+enum TaskPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum MeasurementStatus {
+  RASCUNHO
+  ENVIADA
+  APROVADA
+  REJEITADA
+}
+
+enum DocumentCategory {
+  PROJETO
+  PLANTA
+  CONTRATO
+  NOTA_FISCAL
+  ORCAMENTO
+  ART
+  RRT
+  LAUDO
+  RELATORIO
+  OUTROS
+}
+
+enum DocumentStatus {
+  ATIVO
+  ARQUIVADO
+  SUBSTITUIDO
+}
+
+enum ExpenseCategory {
+  MATERIAL
+  MAO_DE_OBRA
+  EQUIPAMENTO
+  TRANSPORTE
+  SERVICOS
+  OUTROS
+}
+
+enum ExpenseStatus {
+  PENDENTE
+  PAGO
+  CANCELADO
+  ATRASADO
+}
+
+enum OccurrenceCategory {
+  SEGURANCA
+  MATERIAL
+  MAO_DE_OBRA
+  PROJETO
+  FINANCEIRO
+  PRAZO
+  QUALIDADE
+  OUTROS
+}
+
+enum OccurrenceStatus {
+  ABERTA
+  EM_ANDAMENTO
+  RESOLVIDA
+  CANCELADA
+}
+
+enum OccurrencePriority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum NotificationType {
+  ETAPA_ATRASADA
+  DOCUMENTO_VENCENDO
+  ORCAMENTO_EXCEDIDO
+  ATIVIDADE_PENDENTE
+  MEDICAO_PENDENTE
+  NOVA_ATIVIDADE
+  OCORRENCIA_CRITICA
+  GERAL
+}
+
+enum ServiceUnit {
+  UNIDADE
+  METRO
+  METRO_QUADRADO
+  METRO_CUBICO
+  KG
+  HORA
+  DIARIA
+  PACOTE
+  OUTRO
+}
+
+enum ProjectMemberRole {
+  RESPONSAVEL
+  COLABORADOR
+  VISUALIZADOR
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  LOGOUT
+  UPLOAD
+  DOWNLOAD
+}
+
+// ============================================================
+// USUÁRIOS E AUTENTICAÇÃO
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          UserRole  @default(VISUALIZADOR)
+  active        Boolean   @default(true)
+  phone         String?
+  position      String?   // cargo
+  company       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  // Auth.js relations
+  accounts Account[]
+  sessions Session[]
+
+  // Business relations
+  projectMembers    ProjectMember[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  createdTasks      Task[]            @relation("TaskCreator")
+  measurements      Measurement[]
+  uploadedFiles     File[]
+  uploadedPhotos    Photo[]
+  responsibleStages Stage[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  documents         Document[]
+  expenses          Expense[]
+  occurrences       Occurrence[]
+  comments          Comment[]
+  managedProjects   Project[]         @relation("ProjectResponsible")
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// OBRAS (PROJETOS)
+// ============================================================
+
+model Project {
+  id          String        @id @default(cuid())
+  code        String        @unique // OBR-0001
+  name        String
+  description String?       @db.Text
+  client      String
+  clientEmail String?
+  clientPhone String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  status      ProjectStatus @default(PLANEJAMENTO)
+  startDate   DateTime?
+  endDate     DateTime?     // data prevista
+  actualEndDate DateTime?   // data real de conclusão
+  totalBudget Decimal?      @db.Decimal(15, 2)
+  coverImage  String?       // path da imagem de capa
+  notes       String?       @db.Text
+  responsibleId String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  responsible    User?           @relation("ProjectResponsible", fields: [responsibleId], references: [id])
+  members        ProjectMember[]
+  stages         Stage[]
+  tasks          Task[]
+  expenses       Expense[]
+  budgetItems    BudgetItem[]
+  measurements   Measurement[]
+  documents      Document[]
+  photos         Photo[]
+  occurrences    Occurrence[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  suppliers      ProjectSupplier[]
+
+  @@index([status])
+  @@index([code])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id             String            @id @default(cuid())
+  projectId      String
+  userId         String
+  role           ProjectMemberRole @default(COLABORADOR)
+  responsibility String?           // ex: "Engenheiro responsável"
+  position       String?           // cargo na obra
+  joinedAt       DateTime          @default(now())
+  leftAt         DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// ============================================================
+// ETAPAS
+// ============================================================
+
+model Stage {
+  id                String      @id @default(cuid())
+  projectId         String
+  name              String
+  code              String?
+  description       String?     @db.Text
+  order             Int         @default(0)
+  responsibleId     String?
+  plannedStartDate  DateTime?
+  plannedEndDate    DateTime?
+  actualStartDate   DateTime?
+  actualEndDate     DateTime?
+  plannedProgress   Decimal     @default(0) @db.Decimal(5, 2) // 0-100
+  actualProgress    Decimal     @default(0) @db.Decimal(5, 2) // calculado
+  status            StageStatus @default(NAO_INICIADA)
+  priority          TaskPriority @default(MEDIA)
+  notes             String?     @db.Text
+  color             String?     // para o gantt
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responsible  User?         @relation(fields: [responsibleId], references: [id])
+  services     Service[]
+  tasks        Task[]
+  expenses     Expense[]
+  measurements Measurement[]
+  photos       Photo[]
+  occurrences  Occurrence[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([order])
+  @@map("stages")
+}
+
+// ============================================================
+// SERVIÇOS
+// ============================================================
+
+model Service {
+  id               String        @id @default(cuid())
+  stageId          String
+  name             String
+  description      String?       @db.Text
+  unit             ServiceUnit   @default(UNIDADE)
+  plannedQty       Decimal       @default(0) @db.Decimal(10, 2)
+  executedQty      Decimal       @default(0) @db.Decimal(10, 2)
+  unitPrice        Decimal       @default(0) @db.Decimal(15, 2)
+  responsibleId    String?
+  status           ServiceStatus @default(NAO_INICIADO)
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualEndDate    DateTime?
+  notes            String?       @db.Text
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  stage       Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([stageId])
+  @@index([status])
+  @@map("services")
+}
+
+// ============================================================
+// TAREFAS / ATIVIDADES
+// ============================================================
+
+model Task {
+  id           String       @id @default(cuid())
+  projectId    String
+  stageId      String?
+  title        String
+  description  String?      @db.Text
+  assigneeId   String?
+  creatorId    String
+  priority     TaskPriority @default(MEDIA)
+  status       TaskStatus   @default(A_FAZER)
+  dueDate      DateTime?
+  completedAt  DateTime?
+  order        Int          @default(0) // para kanban
+  tags         String[]     @default([])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       Stage?     @relation(fields: [stageId], references: [id])
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  attachments TaskFile[]
+  comments    Comment[]
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model TaskFile {
+  id     String @id @default(cuid())
+  taskId String
+  fileId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  file File @relation(fields: [fileId], references: [id])
+
+  @@map("task_files")
+}
+
+// ============================================================
+// FINANCEIRO
+// ============================================================
+
+model BudgetItem {
+  id          String          @id @default(cuid())
+  projectId   String
+  category    ExpenseCategory
+  description String
+  plannedValue Decimal        @db.Decimal(15, 2)
+  notes       String?         @db.Text
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@index([projectId])
+  @@index([category])
+  @@map("budget_items")
+}
+
+model Expense {
+  id             String          @id @default(cuid())
+  projectId      String
+  stageId        String?
+  budgetItemId   String?
+  supplierId     String?
+  createdById    String
+  date           DateTime
+  description    String
+  category       ExpenseCategory
+  plannedValue   Decimal?        @db.Decimal(15, 2)
+  realizedValue  Decimal         @db.Decimal(15, 2)
+  paymentMethod  String?         // dinheiro, cartão, transferência, etc.
+  invoiceNumber  String?         // número da nota fiscal
+  status         ExpenseStatus   @default(PENDENTE)
+  notes          String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage      Stage?      @relation(fields: [stageId], references: [id])
+  budgetItem BudgetItem? @relation(fields: [budgetItemId], references: [id])
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id])
+  createdBy  User        @relation(fields: [createdById], references: [id])
+  attachments ExpenseFile[]
+
+  @@index([projectId])
+  @@index([stageId])
+  @@index([category])
+  @@index([date])
+  @@index([status])
+  @@map("expenses")
+}
+
+model ExpenseFile {
+  id        String @id @default(cuid())
+  expenseId String
+  fileId    String
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  file    File    @relation(fields: [fileId], references: [id])
+
+  @@map("expense_files")
+}
+
+// ============================================================
+// MEDIÇÕES
+// ============================================================
+
+model Measurement {
+  id            String            @id @default(cuid())
+  projectId     String
+  stageId       String?
+  number        Int
+  date          DateTime
+  value         Decimal           @db.Decimal(15, 2)
+  progress      Decimal           @default(0) @db.Decimal(5, 2) // percentual executado
+  status        MeasurementStatus @default(RASCUNHO)
+  responsibleId String?
+  notes         String?           @db.Text
+  reviewedAt    DateTime?
+  reviewNotes   String?           @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       Stage?   @relation(fields: [stageId], references: [id])
+  responsible User?    @relation(fields: [responsibleId], references: [id])
+  attachments MeasurementFile[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+  @@index([status])
+  @@map("measurements")
+}
+
+model MeasurementFile {
+  id            String @id @default(cuid())
+  measurementId String
+  fileId        String
+
+  measurement Measurement @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+  file        File        @relation(fields: [fileId], references: [id])
+
+  @@map("measurement_files")
+}
+
+// ============================================================
+// DOCUMENTOS
+// ============================================================
+
+model Document {
+  id               String           @id @default(cuid())
+  projectId        String
+  name             String
+  category         DocumentCategory
+  description      String?          @db.Text
+  status           DocumentStatus   @default(ATIVO)
+  currentVersionId String?          @unique
+  responsibleId    String?
+  expiresAt        DateTime?
+  tags             String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responsible    User?             @relation(fields: [responsibleId], references: [id])
+  versions       DocumentVersion[]
+  currentVersion DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+
+  @@index([projectId])
+  @@index([category])
+  @@index([status])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id           String   @id @default(cuid())
+  documentId   String
+  version      String   // v1, v2, v3...
+  fileId       String
+  uploadedById String
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  file       File     @relation(fields: [fileId], references: [id])
+  currentFor Document? @relation("CurrentVersion")
+
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+// ============================================================
+// ARQUIVOS
+// ============================================================
+
+model File {
+  id           String   @id @default(cuid())
+  name         String   // nome amigável
+  originalName String   // nome original do upload
+  mimeType     String
+  size         Int      // tamanho em bytes
+  path         String   // caminho no servidor
+  url          String   // URL pública
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy       User              @relation(fields: [uploadedById], references: [id])
+  documentVersions DocumentVersion[]
+  photos           Photo[]
+  taskFiles        TaskFile[]
+  expenseFiles     ExpenseFile[]
+  measurementFiles MeasurementFile[]
+  occurrencePhotos OccurrencePhoto[]
+
+  @@index([uploadedById])
+  @@map("files")
+}
+
+// ============================================================
+// FOTOS
+// ============================================================
+
+model Photo {
+  id          String   @id @default(cuid())
+  projectId   String
+  stageId     String?
+  fileId      String
+  title       String?
+  description String?  @db.Text
+  category    String?  // antes, durante, depois, etc.
+  takenAt     DateTime @default(now())
+  uploadedById String
+  createdAt   DateTime @default(now())
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       Stage?  @relation(fields: [stageId], references: [id])
+  file        File    @relation(fields: [fileId], references: [id])
+  uploadedBy  User    @relation(fields: [uploadedById], references: [id])
+
+  @@index([projectId])
+  @@index([stageId])
+  @@map("photos")
+}
+
+// ============================================================
+// FORNECEDORES
+// ============================================================
+
+model Supplier {
+  id           String   @id @default(cuid())
+  companyName  String
+  tradeName    String?
+  cnpj         String?  @unique
+  phone        String?
+  email        String?
+  address      String?
+  city         String?
+  state        String?
+  contact      String?  // nome do contato principal
+  category     String?  // materiais, serviços, equipamentos, etc.
+  notes        String?  @db.Text
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  expenses  Expense[]
+  projects  ProjectSupplier[]
+
+  @@index([cnpj])
+  @@index([active])
+  @@map("suppliers")
+}
+
+model ProjectSupplier {
+  id         String   @id @default(cuid())
+  projectId  String
+  supplierId String
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, supplierId])
+  @@map("project_suppliers")
+}
+
+// ============================================================
+// OCORRÊNCIAS
+// ============================================================
+
+model Occurrence {
+  id            String             @id @default(cuid())
+  projectId     String
+  stageId       String?
+  title         String
+  description   String             @db.Text
+  category      OccurrenceCategory
+  priority      OccurrencePriority @default(MEDIA)
+  status        OccurrenceStatus   @default(ABERTA)
+  date          DateTime
+  responsibleId String?
+  resolvedAt    DateTime?
+  resolution    String?            @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  deletedAt     DateTime?
+
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage       Stage?           @relation(fields: [stageId], references: [id])
+  responsible User?            @relation(fields: [responsibleId], references: [id])
+  photos      OccurrencePhoto[]
+  comments    Comment[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+  @@map("occurrences")
+}
+
+model OccurrencePhoto {
+  id           String @id @default(cuid())
+  occurrenceId String
+  fileId       String
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  file       File       @relation(fields: [fileId], references: [id])
+
+  @@map("occurrence_photos")
+}
+
+// ============================================================
+// NOTIFICAÇÕES
+// ============================================================
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  projectId  String?
+  title      String
+  message    String           @db.Text
+  type       NotificationType @default(GERAL)
+  read       Boolean          @default(false)
+  readAt     DateTime?
+  entityType String?          // "stage", "task", "document", etc.
+  entityId   String?          // id da entidade relacionada
+  url        String?          // link para navegar
+  createdAt  DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// COMENTÁRIOS
+// ============================================================
+
+model Comment {
+  id           String   @id @default(cuid())
+  content      String   @db.Text
+  authorId     String
+  taskId       String?
+  occurrenceId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  author     User        @relation(fields: [authorId], references: [id])
+  task       Task?       @relation(fields: [taskId], references: [id])
+  occurrence Occurrence? @relation(fields: [occurrenceId], references: [id])
+
+  @@index([taskId])
+  @@index([occurrenceId])
+  @@map("comments")
+}
+
+// ============================================================
+// AUDITORIA
+// ============================================================
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  projectId  String?
+  action     AuditAction
+  entity     String      // nome da entidade: "Project", "Stage", etc.
+  entityId   String      // id do registro afetado
+  oldValue   Json?       // valor anterior
+  newValue   Json?       // novo valor
+  description String?    // "Felipe alterou status de Fundação de EM_ANDAMENTO para CONCLUIDA"
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

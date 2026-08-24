@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: obracontrol-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: obracontrol
+      POSTGRES_PASSWORD: obracontrol123
+      POSTGRES_DB: obracontrol
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U obracontrol']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: obracontrol-app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://obracontrol:obracontrol123@postgres:5432/obracontrol?schema=public
+      AUTH_SECRET: obra-control-secret-change-in-production
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      UPLOAD_DIR: /app/public/uploads
+      NEXT_PUBLIC_UPLOAD_URL: /uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/public/uploads
+
+volumes:
+  postgres_data:
+  uploads_data:

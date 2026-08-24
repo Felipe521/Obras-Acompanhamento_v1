@@ -1,0 +1,1 @@
+﻿export default function CustosPage() { return <div className="space-y-6"><h1 className="text-2xl font-bold">Custos</h1><p className="text-muted-foreground">Controle financeiro de todas as obras.</p></div> }

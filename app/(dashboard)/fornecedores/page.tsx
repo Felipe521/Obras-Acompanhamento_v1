@@ -1,0 +1,1 @@
+﻿export default function FornecedoresPage() { return <div className="space-y-6"><h1 className="text-2xl font-bold">Fornecedores</h1><p className="text-muted-foreground">Cadastro de fornecedores.</p></div> }

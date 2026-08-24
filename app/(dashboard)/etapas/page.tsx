@@ -1,0 +1,1 @@
+﻿export default function EtapasPage() { return <div className="space-y-6"><h1 className="text-2xl font-bold">Etapas</h1><p className="text-muted-foreground">Gerencie as etapas de todas as obras.</p></div> }

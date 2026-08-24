@@ -1,0 +1,1 @@
+﻿export default function OcorrenciasPage() { return <div className="space-y-6"><h1 className="text-2xl font-bold">Ocorrências</h1><p className="text-muted-foreground">Registro de ocorrências das obras.</p></div> }
