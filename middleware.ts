@@ -4,12 +4,9 @@ import type { NextRequest } from 'next/server'
 export async function middleware(req: NextRequest) {
   const { nextUrl } = req
 
-  // Check for the NextAuth session token cookie (works in both dev and prod)
-  const token =
-    req.cookies.get('__Secure-authjs.session-token') ??
-    req.cookies.get('authjs.session-token') ??
-    req.cookies.get('__Secure-next-auth.session-token') ??
-    req.cookies.get('next-auth.session-token')
+  // Check for the NextAuth session token cookie (handles both v4 and v5, dev and prod)
+  const allCookies = req.cookies.getAll()
+  const token = allCookies.find(c => c.name.includes('session-token'))
 
   const isLoggedIn = !!token
 
