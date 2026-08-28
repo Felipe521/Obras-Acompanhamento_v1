@@ -20,7 +20,7 @@ interface AlertsPanelProps {
 }
 
 export function AlertsPanel({ overdueStages, delayed, pendingTasks, percentUsed }: AlertsPanelProps) {
-  const alerts: AlertItem[] = [
+  const allAlerts: AlertItem[] = [
     {
       icon: AlertTriangle,
       label: 'Etapas atrasadas',
@@ -50,10 +50,12 @@ export function AlertsPanel({ overdueStages, delayed, pendingTasks, percentUsed 
       label: 'Orçamento utilizado',
       value: `${percentUsed.toFixed(1)}%`,
       href: '/custos',
-      variant: percentUsed > 90 ? 'danger' : 'warning',
+      variant: (percentUsed > 90 ? 'danger' : 'warning') as 'danger' | 'warning',
       show: percentUsed > 75,
     },
-  ].filter((a) => a.show)
+  ]
+
+  const alerts = allAlerts.filter((a) => a.show)
 
   const variantStyles = {
     danger: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50',

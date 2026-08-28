@@ -11,7 +11,7 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, type, className }: StatusBadgeProps) {
-  let label = status
+  let label: string = status as string
   let colorClass = 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-400'
 
   const getMap = () => {

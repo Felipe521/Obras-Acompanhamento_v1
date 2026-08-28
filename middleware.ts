@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 
 export async function middleware(req: NextRequest) {
   const { nextUrl } = req
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET })
+
+  // Check for the NextAuth session token cookie (works in both dev and prod)
+  const token =
+    req.cookies.get('__Secure-authjs.session-token') ??
+    req.cookies.get('authjs.session-token') ??
+    req.cookies.get('__Secure-next-auth.session-token') ??
+    req.cookies.get('next-auth.session-token')
+
   const isLoggedIn = !!token
 
-  const isAuthPage = nextUrl.pathname.startsWith('/login') || 
-                     nextUrl.pathname.startsWith('/register') ||
-                     nextUrl.pathname.startsWith('/forgot-password')
-  
+  const isAuthPage =
+    nextUrl.pathname.startsWith('/login') ||
+    nextUrl.pathname.startsWith('/register') ||
+    nextUrl.pathname.startsWith('/forgot-password')
+
   const isApiAuthRoute = nextUrl.pathname.startsWith('/api/auth')
   const isPublicRoute = nextUrl.pathname === '/'
   const isApiRoute = nextUrl.pathname.startsWith('/api/')
