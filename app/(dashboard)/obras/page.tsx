@@ -225,7 +225,7 @@ export default function ObrasPage() {
 
                 {/* Status + Responsible */}
                 <div className="flex items-center justify-between mb-3">
-                  <StatusBadge status={project.status} type="project" />
+                  <StatusBadge status={project.status as any} type="project" />
                   {project.responsible && (
                     <span className="text-xs text-muted-foreground truncate ml-2">
                       {project.responsible.name}

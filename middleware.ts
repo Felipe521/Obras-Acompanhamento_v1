@@ -1,9 +1,11 @@
-import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-export default auth((req) => {
+export async function middleware(req: NextRequest) {
   const { nextUrl } = req
-  const isLoggedIn = !!req.auth
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET })
+  const isLoggedIn = !!token
 
   const isAuthPage = nextUrl.pathname.startsWith('/login') || 
                      nextUrl.pathname.startsWith('/register') ||
@@ -11,8 +13,14 @@ export default auth((req) => {
   
   const isApiAuthRoute = nextUrl.pathname.startsWith('/api/auth')
   const isPublicRoute = nextUrl.pathname === '/'
+  const isApiRoute = nextUrl.pathname.startsWith('/api/')
 
   if (isApiAuthRoute || isPublicRoute) {
+    return NextResponse.next()
+  }
+
+  // Let API routes handle their own auth
+  if (isApiRoute) {
     return NextResponse.next()
   }
 
@@ -30,8 +38,8 @@ export default auth((req) => {
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public).*)'],
 }

@@ -17,6 +17,7 @@ import { RecentProjects } from '@/components/dashboard/recent-projects'
 import { AlertsPanel } from '@/components/dashboard/alerts-panel'
 import { formatCurrency } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Dashboard' }
 
 async function getDashboardData(userId: string, role: string) {

@@ -23,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Avatar } from '@/components/ui/avatar'
 import { toast } from 'sonner'
 
 // Breadcrumb generation from pathname
@@ -175,7 +174,3 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
   )
 }
 
-// Avatar stub component
-function Avatar({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
-}

@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(user, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Dados inválidos', details: error.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Dados inválidos', details: error.issues }, { status: 400 })
     }
     console.error('[POST /api/users]', error)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })

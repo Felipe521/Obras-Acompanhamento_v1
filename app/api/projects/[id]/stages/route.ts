@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         stage.plannedEndDate &&
         new Date(stage.plannedEndDate) < now &&
         stage.status !== 'CONCLUIDA' &&
-        stage.status !== 'CANCELADA'
+        (stage.status as string) !== 'CANCELADA'
       ) {
         status = 'ATRASADA'
       }
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json(stage, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Dados inválidos', details: error.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Dados inválidos', details: error.issues }, { status: 400 })
     }
     console.error('[POST /api/projects/:id/stages]', error)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
