@@ -1,6 +1,6 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import { logoutAction } from '@/app/actions/auth'
 
 // Breadcrumb generation from pathname
 function generateBreadcrumbs(pathname: string) {
@@ -77,8 +78,10 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
   const breadcrumbs = generateBreadcrumbs(pathname)
 
   async function handleSignOut() {
-    await signOut({ callbackUrl: '/login' })
-    toast.success('Logout realizado com sucesso')
+    // Agora isso aciona a Server Action que tem permissão absoluta
+    // para destruir o cookie de sessão do servidor e forçar o redirecionamento.
+    toast.success('Desconectando...')
+    await logoutAction()
   }
 
   return (
