@@ -1,14 +1,12 @@
+import NextAuth from 'next-auth'
+import { authConfig } from '@/lib/auth.config'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
-export async function middleware(req: NextRequest) {
+const { auth } = NextAuth(authConfig)
+
+export default auth((req) => {
   const { nextUrl } = req
-
-  // Check for the NextAuth session token cookie (handles both v4 and v5, dev and prod)
-  const allCookies = req.cookies.getAll()
-  const token = allCookies.find(c => c.name.includes('session-token'))
-
-  const isLoggedIn = !!token
+  const isLoggedIn = !!req.auth
 
   const isAuthPage =
     nextUrl.pathname.startsWith('/login') ||
@@ -19,15 +17,17 @@ export async function middleware(req: NextRequest) {
   const isPublicRoute = nextUrl.pathname === '/'
   const isApiRoute = nextUrl.pathname.startsWith('/api/')
 
+  // Permitir rotas públicas e rotas de autenticação
   if (isApiAuthRoute || isPublicRoute) {
     return NextResponse.next()
   }
 
-  // Let API routes handle their own auth
+  // Deixar as rotas da API lidarem com sua própria autenticação (exceto auth routes acima)
   if (isApiRoute) {
     return NextResponse.next()
   }
 
+  // Se o usuário tentar acessar a página de login já autenticado, redireciona para o dashboard
   if (isAuthPage) {
     if (isLoggedIn) {
       return NextResponse.redirect(new URL('/dashboard', nextUrl))
@@ -35,6 +35,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Rotas protegidas (todas as outras que chegam aqui) - redireciona se não estiver logado
   if (!isLoggedIn) {
     const redirectUrl = new URL('/login', nextUrl)
     redirectUrl.searchParams.set('callbackUrl', nextUrl.pathname)
@@ -42,7 +43,7 @@ export async function middleware(req: NextRequest) {
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|public).*)'],
