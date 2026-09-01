@@ -161,7 +161,10 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={handleSignOut}
+              onSelect={(e) => {
+                e.preventDefault()
+                handleSignOut()
+              }}
               className="text-red-500 focus:text-red-500 cursor-pointer"
             >
               <LogOut className="w-4 h-4 mr-2" />
