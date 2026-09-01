@@ -115,6 +115,7 @@ async function getDashboardData(userId: string, role: string) {
 }
 
 export default async function DashboardPage() {
+  try {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
@@ -205,8 +206,28 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Projects */}
       <RecentProjects projects={data.recentProjects} />
     </div>
   )
+  } catch (error: any) {
+    return (
+      <div className="p-6 bg-red-50 text-red-900 border border-red-200 rounded-lg shadow-sm">
+        <h2 className="text-xl font-bold mb-4 flex items-center">
+          <AlertTriangle className="mr-2" />
+          Erro na Renderização do Dashboard
+        </h2>
+        <div className="bg-white p-4 rounded text-sm overflow-auto">
+          <p className="font-semibold mb-2">Mensagem do erro (apenas para debug):</p>
+          <pre>{error.message || String(error)}</pre>
+          {error.stack && (
+            <>
+              <p className="font-semibold mt-4 mb-2">Stack Trace:</p>
+              <pre className="text-xs text-gray-500">{error.stack}</pre>
+            </>
+          )}
+        </div>
+        <p className="mt-4 text-sm font-semibold">Tire um print desta tela e envie para o chat!</p>
+      </div>
+    )
+  }
 }
