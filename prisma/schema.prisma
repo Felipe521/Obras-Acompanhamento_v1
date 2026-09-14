@@ -367,9 +367,11 @@ model Service {
   name             String
   description      String?       @db.Text
   unit             ServiceUnit   @default(UNIDADE)
+  order            Int           @default(0)
   plannedQty       Decimal       @default(0) @db.Decimal(10, 2)
   executedQty      Decimal       @default(0) @db.Decimal(10, 2)
   unitPrice        Decimal       @default(0) @db.Decimal(15, 2)
+  progress         Decimal       @default(0) @db.Decimal(5, 2) // 0-100, manual quando plannedQty=0
   responsibleId    String?
   status           ServiceStatus @default(NAO_INICIADO)
   plannedStartDate DateTime?
@@ -380,10 +382,13 @@ model Service {
   updatedAt        DateTime      @updatedAt
   deletedAt        DateTime?
 
-  stage       Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stage       Stage     @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  expenses    Expense[]
 
   @@index([stageId])
   @@index([status])
+  @@index([order])
   @@map("services")
 }
 
@@ -395,15 +400,18 @@ model Task {
   id           String       @id @default(cuid())
   projectId    String
   stageId      String?
+  serviceId    String?
   title        String
   description  String?      @db.Text
   assigneeId   String?
   creatorId    String
   priority     TaskPriority @default(MEDIA)
   status       TaskStatus   @default(A_FAZER)
-  dueDate      DateTime?
+  startDate    DateTime?
+  dueDate      DateTime?    // data final
+  progress     Decimal      @default(0) @db.Decimal(5, 2) // 0-100
   completedAt  DateTime?
-  order        Int          @default(0) // para kanban
+  order        Int          @default(0) // para kanban e cronograma
   tags         String[]     @default([])
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -411,6 +419,7 @@ model Task {
 
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   stage       Stage?     @relation(fields: [stageId], references: [id])
+  service     Service?   @relation(fields: [serviceId], references: [id])
   assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
   creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
   attachments TaskFile[]
@@ -420,6 +429,8 @@ model Task {
   @@index([assigneeId])
   @@index([status])
   @@index([dueDate])
+  @@index([serviceId])
+  @@index([stageId])
   @@map("tasks")
 }
 
@@ -460,14 +471,18 @@ model Expense {
   id             String          @id @default(cuid())
   projectId      String
   stageId        String?
+  serviceId      String?
   budgetItemId   String?
   supplierId     String?
   createdById    String
   date           DateTime
   description    String
   category       ExpenseCategory
+  quantity       Decimal?        @db.Decimal(10, 2)
+  unit           ServiceUnit?
+  unitValue      Decimal?        @db.Decimal(15, 2)
   plannedValue   Decimal?        @db.Decimal(15, 2)
-  realizedValue  Decimal         @db.Decimal(15, 2)
+  realizedValue  Decimal         @db.Decimal(15, 2) // = quantity * unitValue quando ambos presentes
   paymentMethod  String?         // dinheiro, cartão, transferência, etc.
   invoiceNumber  String?         // número da nota fiscal
   status         ExpenseStatus   @default(PENDENTE)
@@ -478,6 +493,7 @@ model Expense {
 
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   stage      Stage?      @relation(fields: [stageId], references: [id])
+  service    Service?    @relation(fields: [serviceId], references: [id])
   budgetItem BudgetItem? @relation(fields: [budgetItemId], references: [id])
   supplier   Supplier?   @relation(fields: [supplierId], references: [id])
   createdBy  User        @relation(fields: [createdById], references: [id])
@@ -485,6 +501,7 @@ model Expense {
 
   @@index([projectId])
   @@index([stageId])
+  @@index([serviceId])
   @@index([category])
   @@index([date])
   @@index([status])

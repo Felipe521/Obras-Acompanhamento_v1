@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { computeStageActualProgress, computeStageStatus } from '@/lib/stage-progress'
 import { z } from 'zod'
 
 const stageSchema = z.object({
@@ -29,34 +30,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       where: { projectId: params.id, deletedAt: null },
       include: {
         responsible: { select: { id: true, name: true, image: true } },
-        services: { where: { deletedAt: null }, select: { status: true, plannedQty: true, executedQty: true, unitPrice: true } },
+        services: {
+          where: { deletedAt: null },
+          orderBy: { order: 'asc' },
+          select: { id: true, name: true, status: true, plannedQty: true, executedQty: true, unitPrice: true, progress: true, unit: true },
+        },
         _count: { select: { tasks: { where: { deletedAt: null } } } },
       },
       orderBy: { order: 'asc' },
     })
 
-    // Auto-calculate and update status for overdue stages
-    const now = new Date()
+    // Progresso/status calculados a partir dos subtópicos (não persistido aqui — GET é somente leitura)
     const stagesWithCalc = stages.map((stage) => {
-      const services = stage.services
-      let actualProgress = Number(stage.actualProgress)
-
-      if (services.length > 0) {
-        const totalQty = services.reduce((sum, s) => sum + Number(s.plannedQty), 0)
-        const executedQty = services.reduce((sum, s) => sum + Number(s.executedQty), 0)
-        actualProgress = totalQty > 0 ? Math.min(100, (executedQty / totalQty) * 100) : 0
-      }
-
-      // Auto status: if past end date and not concluded => ATRASADA
-      let status = stage.status
-      if (
-        stage.plannedEndDate &&
-        new Date(stage.plannedEndDate) < now &&
-        stage.status !== 'CONCLUIDA' &&
-        (stage.status as string) !== 'CANCELADA'
-      ) {
-        status = 'ATRASADA'
-      }
+      const actualProgress = stage.services.length > 0 ? computeStageActualProgress(stage.services) : Number(stage.actualProgress)
+      const status = computeStageStatus({
+        status: stage.status,
+        plannedEndDate: stage.plannedEndDate,
+        actualProgress,
+      })
 
       return { ...stage, actualProgress, status }
     })

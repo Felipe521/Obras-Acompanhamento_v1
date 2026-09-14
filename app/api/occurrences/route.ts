@@ -63,6 +63,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const data = createOccurrenceSchema.parse(body)
 
+    if (!['ADMIN', 'GESTOR'].includes(session.user.role as string)) {
+      const isMember = await prisma.projectMember.findFirst({
+        where: { projectId: data.projectId, userId: session.user.id as string },
+      })
+      if (!isMember) {
+        return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
+      }
+    }
+
     const occurrence = await prisma.occurrence.create({
       data: {
         ...data,

@@ -19,7 +19,10 @@ export function formatCurrency(value: number | string | null | undefined): strin
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return '-'
   const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, 'dd/MM/yyyy', { locale: ptBR })
+  // Campos "somente data" (prazo, data de despesa, etc.) são armazenados à meia-noite
+  // UTC. Formatar usando os componentes UTC evita que fusos negativos (ex. UTC-3)
+  // exibam o dia anterior ao real.
+  return format(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()), 'dd/MM/yyyy', { locale: ptBR })
 }
 
 export function formatDateTime(date: Date | string | null | undefined): string {

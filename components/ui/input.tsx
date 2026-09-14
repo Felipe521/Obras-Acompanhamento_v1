@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onFocus, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -13,6 +13,16 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className
         )}
         ref={ref}
+        onFocus={
+          type === "number"
+            ? (e) => {
+                // Seleciona o valor ao focar — sem isso, digitar sobre um "0"
+                // pré-preenchido concatena em vez de substituir (ex: "0" + "50" = "050").
+                e.target.select()
+                onFocus?.(e)
+              }
+            : onFocus
+        }
         {...props}
       />
     )

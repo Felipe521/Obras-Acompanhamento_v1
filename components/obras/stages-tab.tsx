@@ -9,9 +9,12 @@ import { ProgressBar } from '@/components/common/progress-bar'
 import { EmptyState } from '@/components/common/empty-state'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { StageForm } from '@/components/obras/stage-form'
+import { ServiceForm } from '@/components/obras/service-form'
+import { ServiceTable } from '@/components/obras/service-table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { formatDate } from '@/lib/utils'
+import { STAGE_STATUS_BORDER_CLASS } from '@/lib/constants'
 
 interface StagesTabProps {
   project: any
@@ -25,6 +28,11 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [expandedStage, setExpandedStage] = useState<string | null>(null)
+
+  const [serviceFormStageId, setServiceFormStageId] = useState<string | null>(null)
+  const [editService, setEditService] = useState<any | null>(null)
+  const [deleteServiceId, setDeleteServiceId] = useState<{ stageId: string; id: string } | null>(null)
+  const [deletingService, setDeletingService] = useState(false)
 
   async function fetchStages() {
     try {
@@ -52,12 +60,40 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
     }
   }
 
-  const STATUS_COLORS: Record<string, string> = {
-    CONCLUIDA: 'border-l-green-500',
-    EM_ANDAMENTO: 'border-l-blue-500',
-    ATRASADA: 'border-l-red-500',
-    PAUSADA: 'border-l-amber-500',
-    NAO_INICIADA: 'border-l-slate-400',
+  async function handleDeleteService() {
+    if (!deleteServiceId) return
+    setDeletingService(true)
+    try {
+      const res = await fetch(`/api/services/${deleteServiceId.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      toast.success('Subtópico excluído com sucesso')
+      setDeleteServiceId(null)
+      await fetchStages()
+    } catch {
+      toast.error('Erro ao excluir subtópico')
+    } finally {
+      setDeletingService(false)
+    }
+  }
+
+  async function moveService(stage: any, index: number, direction: -1 | 1) {
+    const services = [...stage.services].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= services.length) return
+
+    const a = services[index]
+    const b = services[targetIndex]
+    try {
+      const res = await fetch(`/api/stages/${stage.id}/services/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: a.id, order: b.order }, { id: b.id, order: a.order }] }),
+      })
+      if (!res.ok) throw new Error()
+      await fetchStages()
+    } catch {
+      toast.error('Erro ao reordenar subtópicos')
+    }
   }
 
   return (
@@ -94,7 +130,8 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
         <div className="space-y-2">
           {stages.map((stage) => {
             const isExpanded = expandedStage === stage.id
-            const borderColor = STATUS_COLORS[stage.status] || 'border-l-slate-400'
+            const borderColor = STAGE_STATUS_BORDER_CLASS[stage.status] || 'border-l-slate-400'
+            const sortedServices = [...(stage.services || [])].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
 
             return (
               <Card key={stage.id} className={`border-l-4 ${borderColor}`}>
@@ -181,33 +218,38 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
                         )}
                       </div>
 
-                      {/* Expanded: services */}
-                      {isExpanded && stage.services && stage.services.length > 0 && (
+                      {/* Expanded: subtópicos (services) */}
+                      {isExpanded && (
                         <div className="mt-3 border-t border-border pt-3">
-                          <p className="text-xs font-medium text-muted-foreground mb-2">
-                            Serviços ({stage.services.length})
-                          </p>
-                          <div className="space-y-1.5">
-                            {stage.services.map((svc: any) => {
-                              const pct = svc.plannedQty > 0
-                                ? Math.min(100, (Number(svc.executedQty) / Number(svc.plannedQty)) * 100)
-                                : 0
-                              return (
-                                <div key={svc.id} className="flex items-center gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs truncate">{svc.name}</p>
-                                    <div className="flex items-center gap-2">
-                                      <ProgressBar value={pct} size="sm" className="flex-1" />
-                                      <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">
-                                        {pct.toFixed(0)}%
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <StatusBadge status={svc.status} type="task" className="flex-shrink-0" />
-                                </div>
-                              )
-                            })}
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Subtópicos ({sortedServices.length})
+                            </p>
+                            {canEdit && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-xs px-2"
+                                onClick={() => setServiceFormStageId(stage.id)}
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                Subtópico
+                              </Button>
+                            )}
                           </div>
+
+                          {sortedServices.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-2">Nenhum subtópico cadastrado.</p>
+                          ) : (
+                            <ServiceTable
+                              stageOrder={stage.order || stages.indexOf(stage) + 1}
+                              services={sortedServices}
+                              canEdit={canEdit}
+                              onEdit={(svc) => setEditService({ ...svc, stageId: stage.id })}
+                              onDelete={(id) => setDeleteServiceId({ stageId: stage.id, id })}
+                              onMove={(index, direction) => moveService(stage, index, direction)}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
@@ -249,15 +291,56 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
+      {/* Create/Edit Service (subtópico) Dialog */}
+      <Dialog
+        open={!!serviceFormStageId || !!editService}
+        onOpenChange={(open) => {
+          if (!open) {
+            setServiceFormStageId(null)
+            setEditService(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editService ? 'Editar subtópico' : 'Novo subtópico'}</DialogTitle>
+          </DialogHeader>
+          <ServiceForm
+            stageId={editService?.stageId || serviceFormStageId || ''}
+            service={editService}
+            onSuccess={() => {
+              setServiceFormStageId(null)
+              setEditService(null)
+              fetchStages()
+            }}
+            onCancel={() => {
+              setServiceFormStageId(null)
+              setEditService(null)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm — Stage */}
       <ConfirmDialog
         open={!!deleteId}
         onOpenChange={(open) => !open && setDeleteId(null)}
         title="Excluir etapa?"
-        description="Esta ação removerá a etapa e todos os seus serviços. Não pode ser desfeita."
+        description="Esta ação removerá a etapa e todos os seus subtópicos. Não pode ser desfeita."
         confirmLabel="Excluir"
         onConfirm={handleDelete}
         loading={deleting}
+      />
+
+      {/* Delete Confirm — Service */}
+      <ConfirmDialog
+        open={!!deleteServiceId}
+        onOpenChange={(open) => !open && setDeleteServiceId(null)}
+        title="Excluir subtópico?"
+        description="Esta ação removerá o subtópico. O progresso da etapa será recalculado. Não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={handleDeleteService}
+        loading={deletingService}
       />
     </div>
   )

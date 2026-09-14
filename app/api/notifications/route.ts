@@ -50,10 +50,13 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (id) {
-      await prisma.notification.update({
-        where: { id },
+      const result = await prisma.notification.updateMany({
+        where: { id, userId: session.user.id as string },
         data: { read: true, readAt: new Date() },
       })
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Notificação não encontrada' }, { status: 404 })
+      }
       return NextResponse.json({ success: true })
     }
 
