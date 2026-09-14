@@ -27,6 +27,7 @@ async function getDashboardData(userId: string, role: string) {
     deletedAt: null,
     ...(isAdminOrGestor ? {} : { members: { some: { userId } } }),
   }
+  const expenseWhere = { project: projectsWhere, deletedAt: null }
 
   const [
     totalProjects,
@@ -37,50 +38,51 @@ async function getDashboardData(userId: string, role: string) {
     recentProjects,
     overdueStages,
     pendingTasks,
+    expensesByCategory,
+    expensesByStageRaw,
+    topExpenses,
+    expensesForTrend,
   ] = await Promise.all([
     prisma.project.count({ where: { ...projectsWhere } }),
     prisma.project.count({ where: { ...projectsWhere, status: 'EM_ANDAMENTO' } }),
     prisma.project.count({ where: { ...projectsWhere, status: 'CONCLUIDA' } }),
-    prisma.expense.aggregate({
-      where: {
-        project: projectsWhere,
-        deletedAt: null,
-      },
-      _sum: { realizedValue: true },
-    }),
+    prisma.expense.aggregate({ where: expenseWhere, _sum: { realizedValue: true } }),
     prisma.stage.groupBy({
       by: ['status'],
-      where: {
-        project: projectsWhere,
-        deletedAt: null,
-      },
+      where: { project: projectsWhere, deletedAt: null },
       _count: { status: true },
     }),
     prisma.project.findMany({
       where: projectsWhere,
       include: {
         responsible: { select: { name: true } },
-        stages: {
-          where: { deletedAt: null },
-          select: { actualProgress: true },
-        },
+        stages: { where: { deletedAt: null }, select: { actualProgress: true } },
       },
       orderBy: { updatedAt: 'desc' },
       take: 5,
     }),
-    prisma.stage.count({
-      where: {
-        project: projectsWhere,
-        status: 'ATRASADA',
-        deletedAt: null,
-      },
-    }),
+    prisma.stage.count({ where: { project: projectsWhere, status: 'ATRASADA', deletedAt: null } }),
     prisma.task.count({
-      where: {
-        project: projectsWhere,
-        status: { in: ['A_FAZER', 'EM_ANDAMENTO'] },
-        deletedAt: null,
-      },
+      where: { project: projectsWhere, status: { in: ['A_FAZER', 'EM_ANDAMENTO'] }, deletedAt: null },
+    }),
+    prisma.expense.groupBy({ by: ['category'], where: expenseWhere, _sum: { realizedValue: true } }),
+    prisma.expense.groupBy({
+      by: ['stageId'],
+      where: { ...expenseWhere, stageId: { not: null } },
+      _sum: { realizedValue: true },
+      orderBy: { _sum: { realizedValue: 'desc' } },
+      take: 6,
+    }),
+    prisma.expense.findMany({
+      where: expenseWhere,
+      select: { id: true, description: true, realizedValue: true, date: true, project: { select: { code: true } } },
+      orderBy: { realizedValue: 'desc' },
+      take: 5,
+    }),
+    prisma.expense.findMany({
+      where: expenseWhere,
+      select: { date: true, realizedValue: true },
+      orderBy: { date: 'asc' },
     }),
   ])
 
@@ -88,6 +90,32 @@ async function getDashboardData(userId: string, role: string) {
     where: projectsWhere,
     _sum: { totalBudget: true },
   })
+
+  const stageIds = expensesByStageRaw.map((e) => e.stageId).filter(Boolean) as string[]
+  const stageNames = stageIds.length
+    ? await prisma.stage.findMany({ where: { id: { in: stageIds } }, select: { id: true, name: true } })
+    : []
+  const stageNameMap = Object.fromEntries(stageNames.map((s) => [s.id, s.name]))
+  const expensesByStage = expensesByStageRaw.map((e) => ({
+    stageId: e.stageId as string,
+    stageName: stageNameMap[e.stageId as string] || 'Sem etapa',
+    total: Number(e._sum.realizedValue || 0),
+  }))
+
+  // Evolução mensal (agrupado em JS para evitar SQL raw)
+  const monthlyMap = new Map<string, number>()
+  for (const e of expensesForTrend) {
+    const key = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, '0')}`
+    monthlyMap.set(key, (monthlyMap.get(key) || 0) + Number(e.realizedValue))
+  }
+  const monthlyTrend = Array.from(monthlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([key, total]) => {
+      const [year, month] = key.split('-')
+      const label = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+      return { key, label, total }
+    })
 
   return {
     totalProjects,
@@ -111,6 +139,10 @@ async function getDashboardData(userId: string, role: string) {
     })),
     overdueStages,
     pendingTasks,
+    expensesByCategory: expensesByCategory.map((e) => ({ category: e.category, total: Number(e._sum.realizedValue || 0) })),
+    expensesByStage,
+    topExpenses: topExpenses.map((e) => ({ ...e, realizedValue: Number(e.realizedValue), date: e.date.toISOString() })),
+    monthlyTrend,
   }
 }
 
@@ -118,7 +150,6 @@ export default async function DashboardPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  try {
   const data = await getDashboardData(session.user.id as string, session.user.role as string)
   const balance = data.totalBudget - data.totalSpent
   const percentUsed = data.totalBudget > 0 ? (data.totalSpent / data.totalBudget) * 100 : 0
@@ -191,10 +222,23 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {percentUsed > 100 && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400 text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>Orçamento estourado: gastos já superam o orçamento total em {(percentUsed - 100).toFixed(1)}%.</span>
+        </div>
+      )}
+
       {/* Charts & Recent Projects */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <DashboardCharts stagesMap={stagesMap} />
+          <DashboardCharts
+            stagesMap={stagesMap}
+            expensesByCategory={data.expensesByCategory}
+            expensesByStage={data.expensesByStage}
+            topExpenses={data.topExpenses}
+            monthlyTrend={data.monthlyTrend}
+          />
         </div>
         <div>
           <AlertsPanel
@@ -209,25 +253,4 @@ export default async function DashboardPage() {
       <RecentProjects projects={data.recentProjects} />
     </div>
   )
-  } catch (error: any) {
-    return (
-      <div className="p-6 bg-red-50 text-red-900 border border-red-200 rounded-lg shadow-sm">
-        <h2 className="text-xl font-bold mb-4 flex items-center">
-          <AlertTriangle className="mr-2" />
-          Erro na Renderização do Dashboard
-        </h2>
-        <div className="bg-white p-4 rounded text-sm overflow-auto">
-          <p className="font-semibold mb-2">Mensagem do erro (apenas para debug):</p>
-          <pre>{error.message || String(error)}</pre>
-          {error.stack && (
-            <>
-              <p className="font-semibold mt-4 mb-2">Stack Trace:</p>
-              <pre className="text-xs text-gray-500">{error.stack}</pre>
-            </>
-          )}
-        </div>
-        <p className="mt-4 text-sm font-semibold">Tire um print desta tela e envie para o chat!</p>
-      </div>
-    )
-  }
 }

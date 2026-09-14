@@ -1,6 +1,7 @@
 import {
   ProjectStatus,
   StageStatus,
+  ServiceStatus,
   TaskStatus,
   TaskPriority,
   MeasurementStatus,
@@ -34,6 +35,36 @@ export const STAGE_STATUS_MAP: Record<StageStatus, { label: string; color: strin
   ATRASADA: { label: 'Atrasada', color: 'text-red-700', bg: 'bg-red-100' },
 }
 
+// Cor única por status, usada tanto em barras de Gantt (hex, inline style)
+// quanto em bordas de card (classe Tailwind) — evita redeclarar paletas
+// diferentes em cada componente que precisa colorir por status de etapa/tarefa.
+export const STAGE_STATUS_HEX: Record<string, string> = {
+  NAO_INICIADA: '#94a3b8',
+  A_FAZER: '#94a3b8',
+  EM_ANDAMENTO: '#3b82f6',
+  CONCLUIDA: '#22c55e',
+  ATRASADA: '#ef4444',
+  PAUSADA: '#f59e0b',
+  CANCELADA: '#64748b',
+}
+
+export const STAGE_STATUS_BORDER_CLASS: Record<string, string> = {
+  NAO_INICIADA: 'border-l-slate-400',
+  A_FAZER: 'border-l-slate-400',
+  EM_ANDAMENTO: 'border-l-blue-500',
+  CONCLUIDA: 'border-l-green-500',
+  ATRASADA: 'border-l-red-500',
+  PAUSADA: 'border-l-amber-500',
+  CANCELADA: 'border-l-slate-500',
+}
+
+export const SERVICE_STATUS_MAP: Record<ServiceStatus, { label: string; color: string; bg: string }> = {
+  NAO_INICIADO: { label: 'Não iniciado', color: 'text-slate-600', bg: 'bg-slate-100' },
+  EM_ANDAMENTO: { label: 'Em andamento', color: 'text-blue-700', bg: 'bg-blue-100' },
+  CONCLUIDO: { label: 'Concluído', color: 'text-green-700', bg: 'bg-green-100' },
+  CANCELADO: { label: 'Cancelado', color: 'text-red-700', bg: 'bg-red-100' },
+}
+
 export const TASK_STATUS_MAP: Record<TaskStatus, { label: string; color: string; bg: string }> = {
   A_FAZER: { label: 'A fazer', color: 'text-slate-600', bg: 'bg-slate-100' },
   EM_ANDAMENTO: { label: 'Em andamento', color: 'text-blue-700', bg: 'bg-blue-100' },
@@ -62,6 +93,15 @@ export const EXPENSE_CATEGORY_MAP: Record<ExpenseCategory, { label: string; colo
   TRANSPORTE: { label: 'Transporte', color: 'text-cyan-700' },
   SERVICOS: { label: 'Serviços', color: 'text-green-700' },
   OUTROS: { label: 'Outros', color: 'text-slate-600' },
+}
+
+export const EXPENSE_CATEGORY_HEX: Record<ExpenseCategory, string> = {
+  MATERIAL: '#3b82f6',
+  MAO_DE_OBRA: '#a855f7',
+  EQUIPAMENTO: '#f59e0b',
+  TRANSPORTE: '#06b6d4',
+  SERVICOS: '#22c55e',
+  OUTROS: '#94a3b8',
 }
 
 export const EXPENSE_STATUS_MAP: Record<ExpenseStatus, { label: string; color: string; bg: string }> = {

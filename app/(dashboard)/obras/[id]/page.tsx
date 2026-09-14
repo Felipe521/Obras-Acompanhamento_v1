@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notFound, redirect } from 'next/navigation'
 import { ProjectDetailClient } from '@/components/obras/project-detail-client'
+import { computeStageActualProgress, computeStageStatus } from '@/lib/progress-calc'
 import type { Metadata } from 'next'
 
 interface Props {
@@ -35,7 +36,17 @@ export default async function ObraPage({ params }: Props) {
           responsible: { select: { id: true, name: true } },
           services: {
             where: { deletedAt: null },
-            select: { id: true, name: true, unit: true, plannedQty: true, executedQty: true, unitPrice: true, status: true },
+            orderBy: { order: 'asc' },
+            select: { id: true, name: true, unit: true, order: true, plannedQty: true, executedQty: true, unitPrice: true, progress: true, status: true, plannedStartDate: true, plannedEndDate: true, notes: true },
+          },
+          tasks: {
+            where: { deletedAt: null },
+            orderBy: { order: 'asc' },
+            select: {
+              id: true, title: true, status: true, priority: true, startDate: true, dueDate: true,
+              progress: true, serviceId: true, description: true,
+              assignee: { select: { id: true, name: true, image: true } },
+            },
           },
         },
         orderBy: { order: 'asc' },
@@ -75,28 +86,19 @@ export default async function ObraPage({ params }: Props) {
   const totalSpent = Number(expenses._sum.realizedValue || 0)
   const totalBudget = Number(project.totalBudget || budgetItems._sum.plannedValue || 0)
 
-  // Calculate avg progress
-  const stages = project.stages
+  // Progresso/status calculados a partir dos subtópicos (não persistido no GET —
+  // a persistência acontece ao criar/editar/excluir um subtópico, ver lib/stage-progress.ts)
+  const stages = project.stages.map((stage) => {
+    const actualProgress = stage.services.length > 0
+      ? computeStageActualProgress(stage.services)
+      : Number(stage.actualProgress)
+    const status = computeStageStatus({ status: stage.status, plannedEndDate: stage.plannedEndDate, actualProgress })
+    return { ...stage, actualProgress, status: status as typeof stage.status }
+  })
+
   const avgProgress = stages.length > 0
     ? Math.round(stages.reduce((sum, s) => sum + Number(s.actualProgress), 0) / stages.length)
     : 0
-
-  // Auto-update delayed stages
-  const now = new Date()
-  for (const stage of stages) {
-    if (
-      stage.plannedEndDate &&
-      new Date(stage.plannedEndDate) < now &&
-      stage.status !== 'CONCLUIDA' &&
-      stage.status !== 'ATRASADA'
-    ) {
-      await prisma.stage.update({
-        where: { id: stage.id },
-        data: { status: 'ATRASADA' },
-      })
-      stage.status = 'ATRASADA'
-    }
-  }
 
   return (
     <ProjectDetailClient
@@ -115,6 +117,16 @@ export default async function ObraPage({ params }: Props) {
           actualEndDate: s.actualEndDate?.toISOString() || null,
           createdAt: s.createdAt.toISOString(),
           updatedAt: s.updatedAt.toISOString(),
+          services: s.services.map((svc) => ({
+            ...svc,
+            plannedStartDate: svc.plannedStartDate?.toISOString() || null,
+            plannedEndDate: svc.plannedEndDate?.toISOString() || null,
+          })),
+          tasks: s.tasks.map((t) => ({
+            ...t,
+            startDate: t.startDate?.toISOString() || null,
+            dueDate: t.dueDate?.toISOString() || null,
+          })),
         })),
       }}
       financialSummary={{ totalBudget, totalSpent, balance: totalBudget - totalSpent }}

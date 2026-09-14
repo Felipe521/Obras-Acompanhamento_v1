@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   HardHat, Calendar, DollarSign, Users, AlertTriangle, FileText, Image,
-  CheckSquare, Ruler, Layers, ChevronRight, Edit, ArrowLeft,
+  CheckSquare, Ruler, Layers, ChevronRight, Edit, ArrowLeft, Plus,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,12 @@ import { StatusBadge } from '@/components/common/status-badge'
 import { ProgressBar } from '@/components/common/progress-bar'
 import { MetricCard } from '@/components/common/metric-card'
 import { StagesTab } from '@/components/obras/stages-tab'
+import { ServicesTab } from '@/components/obras/services-tab'
+import { GanttChart, type GanttTask } from '@/components/schedule/gantt-chart'
+import { TaskForm } from '@/components/schedule/task-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ProjectForm } from '@/components/obras/project-form'
+import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { ProjectStatus } from '@prisma/client'
 
@@ -33,6 +37,34 @@ export function ProjectDetailClient({
 }: ProjectDetailClientProps) {
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('visao-geral')
+  const [ganttStages, setGanttStages] = useState<any[]>(project.stages || [])
+  const [taskForm, setTaskForm] = useState<{ stageId: string } | null>(null)
+  const [editTask, setEditTask] = useState<{ task: GanttTask; stageId: string } | null>(null)
+
+  async function refetchGantt() {
+    try {
+      const res = await fetch(`/api/stages?projectId=${project.id}&includeTasks=true`)
+      if (res.ok) setGanttStages(await res.json())
+    } catch {}
+  }
+
+  async function handleReschedule(taskId: string, startDate: Date, dueDate: Date) {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate: startDate.toISOString(), dueDate: dueDate.toISOString() }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro')
+      }
+      toast.success('Atividade reagendada')
+      await refetchGantt()
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao reagendar atividade')
+    }
+  }
 
   const canEdit = ['ADMIN', 'GESTOR'].includes(currentUser.role)
   const percentUsed = financialSummary.totalBudget > 0
@@ -245,14 +277,36 @@ export function ProjectDetailClient({
         </TabsContent>
 
         <TabsContent value="servicos" className="mt-4">
-          <div className="text-center py-12 text-muted-foreground">
-            <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p>Selecione uma etapa para ver seus serviços</p>
-          </div>
+          <ServicesTab
+            stages={project.stages.map((s: any) => ({ id: s.id, name: s.name, code: s.code }))}
+            canEdit={canEdit}
+          />
         </TabsContent>
 
         <TabsContent value="cronograma" className="mt-4">
-          <GanttView stages={project.stages} />
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Cronograma</CardTitle>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  onClick={() => setTaskForm({ stageId: ganttStages[0]?.id || '' })}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova atividade
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <GanttChart
+                stages={ganttStages}
+                editable={canEdit}
+                onTaskReschedule={handleReschedule}
+                onAddTask={(stageId) => setTaskForm({ stageId })}
+                onTaskClick={(task, stage) => setEditTask({ task, stageId: stage.id })}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {['custos', 'medicoes', 'documentos', 'fotos', 'atividades', 'ocorrencias', 'equipe'].map((tab) => (
@@ -280,103 +334,47 @@ export function ProjectDetailClient({
           />
         </DialogContent>
       </Dialog>
+
+      {/* New/Edit Task Dialogs (Cronograma tab) */}
+      <Dialog open={!!taskForm} onOpenChange={(open) => !open && setTaskForm(null)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nova atividade</DialogTitle>
+          </DialogHeader>
+          {taskForm && (
+            <TaskForm
+              projectId={project.id}
+              stages={project.stages.map((s: any) => ({ id: s.id, name: s.name }))}
+              defaultStageId={taskForm.stageId}
+              onSuccess={() => {
+                setTaskForm(null)
+                refetchGantt()
+              }}
+              onCancel={() => setTaskForm(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTask} onOpenChange={(open) => !open && setEditTask(null)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar atividade</DialogTitle>
+          </DialogHeader>
+          {editTask && (
+            <TaskForm
+              projectId={project.id}
+              stages={project.stages.map((s: any) => ({ id: s.id, name: s.name }))}
+              task={{ ...editTask.task, stageId: editTask.stageId }}
+              onSuccess={() => {
+                setEditTask(null)
+                refetchGantt()
+              }}
+              onCancel={() => setEditTask(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
-  )
-}
-
-// Simple Gantt-like view
-function GanttView({ stages }: { stages: any[] }) {
-  const stagesWithDates = stages.filter((s) => s.plannedStartDate && s.plannedEndDate)
-
-  if (stagesWithDates.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Calendar className="w-8 h-8 mx-auto mb-2 opacity-30" />
-        <p className="text-sm">Nenhuma etapa com datas cadastradas</p>
-      </div>
-    )
-  }
-
-  const minDate = new Date(Math.min(...stagesWithDates.map((s) => new Date(s.plannedStartDate).getTime())))
-  const maxDate = new Date(Math.max(...stagesWithDates.map((s) => new Date(s.plannedEndDate).getTime())))
-  const totalDays = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)))
-
-  const STATUS_COLORS: Record<string, string> = {
-    CONCLUIDA: 'bg-green-500',
-    EM_ANDAMENTO: 'bg-blue-500',
-    ATRASADA: 'bg-red-500',
-    PAUSADA: 'bg-amber-500',
-    NAO_INICIADA: 'bg-slate-400',
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Cronograma Gantt</CardTitle>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <div className="min-w-[600px] space-y-2">
-          {stages.map((stage) => {
-            if (!stage.plannedStartDate || !stage.plannedEndDate) {
-              return (
-                <div key={stage.id} className="flex items-center gap-3 h-8">
-                  <div className="w-40 flex-shrink-0">
-                    <p className="text-xs font-medium truncate">{stage.name}</p>
-                  </div>
-                  <div className="flex-1 relative h-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="text-xs text-muted-foreground">Sem datas definidas</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }
-
-            const startDays = Math.ceil(
-              (new Date(stage.plannedStartDate).getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)
-            )
-            const duration = Math.max(
-              1,
-              Math.ceil(
-                (new Date(stage.plannedEndDate).getTime() - new Date(stage.plannedStartDate).getTime()) /
-                  (1000 * 60 * 60 * 24)
-              )
-            )
-
-            const left = `${(startDays / totalDays) * 100}%`
-            const width = `${Math.max(2, (duration / totalDays) * 100)}%`
-            const progressWidth = `${Number(stage.actualProgress)}%`
-            const color = STATUS_COLORS[stage.status] || 'bg-slate-400'
-
-            return (
-              <div key={stage.id} className="flex items-center gap-3 h-8">
-                <div className="w-40 flex-shrink-0">
-                  <p className="text-xs font-medium truncate">{stage.name}</p>
-                </div>
-                <div className="flex-1 relative h-6 bg-muted rounded">
-                  <div
-                    className={`absolute top-0 bottom-0 rounded ${color} opacity-30`}
-                    style={{ left, width }}
-                  />
-                  <div
-                    className={`absolute top-0 bottom-0 rounded ${color}`}
-                    style={{ left, width: `calc(${width} * ${Number(stage.actualProgress) / 100})` }}
-                  />
-                  <div
-                    className="absolute top-0 bottom-0 flex items-center"
-                    style={{ left, width }}
-                  >
-                    <span className="text-xs text-white font-bold ml-1 drop-shadow">
-                      {Number(stage.actualProgress).toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-                <StatusBadge status={stage.status} type="stage" />
-              </div>
-            )
-          })}
-        </div>
-      </CardContent>
-    </Card>
   )
 }

@@ -3,20 +3,29 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
-const expenseSchema = z.object({
-  date: z.string(),
-  description: z.string().min(2),
-  category: z.enum(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'TRANSPORTE', 'SERVICOS', 'OUTROS']),
-  stageId: z.string().optional().nullable(),
-  supplierId: z.string().optional().nullable(),
-  budgetItemId: z.string().optional().nullable(),
-  plannedValue: z.number().nonnegative().optional().nullable(),
-  realizedValue: z.number().nonnegative(),
-  paymentMethod: z.string().optional().nullable(),
-  invoiceNumber: z.string().optional().nullable(),
-  status: z.enum(['PENDENTE', 'PAGO', 'CANCELADO', 'ATRASADO']).default('PENDENTE'),
-  notes: z.string().optional().nullable(),
-})
+const expenseSchema = z
+  .object({
+    date: z.string(),
+    description: z.string().min(2),
+    category: z.enum(['MATERIAL', 'MAO_DE_OBRA', 'EQUIPAMENTO', 'TRANSPORTE', 'SERVICOS', 'OUTROS']),
+    stageId: z.string().optional().nullable(),
+    serviceId: z.string().optional().nullable(),
+    supplierId: z.string().optional().nullable(),
+    budgetItemId: z.string().optional().nullable(),
+    quantity: z.number().nonnegative().optional().nullable(),
+    unit: z.enum(['UNIDADE', 'METRO', 'METRO_QUADRADO', 'METRO_CUBICO', 'KG', 'HORA', 'DIARIA', 'PACOTE', 'OUTRO']).optional().nullable(),
+    unitValue: z.number().nonnegative().optional().nullable(),
+    plannedValue: z.number().nonnegative().optional().nullable(),
+    realizedValue: z.number().nonnegative().optional(),
+    paymentMethod: z.string().optional().nullable(),
+    invoiceNumber: z.string().optional().nullable(),
+    status: z.enum(['PENDENTE', 'PAGO', 'CANCELADO', 'ATRASADO']).default('PENDENTE'),
+    notes: z.string().optional().nullable(),
+  })
+  .refine((data) => data.realizedValue != null || (data.quantity != null && data.unitValue != null), {
+    message: 'Informe o valor realizado ou quantidade + valor unitário',
+    path: ['realizedValue'],
+  })
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -44,6 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         where,
         include: {
           stage: { select: { id: true, name: true } },
+          service: { select: { id: true, name: true } },
           supplier: { select: { id: true, companyName: true } },
           createdBy: { select: { id: true, name: true } },
         },
@@ -92,18 +102,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json()
     const data = expenseSchema.parse(body)
 
+    const realizedValue =
+      data.quantity != null && data.unitValue != null ? data.quantity * data.unitValue : (data.realizedValue as number)
+
     const expense = await prisma.expense.create({
       data: {
         projectId: params.id,
         stageId: data.stageId || null,
+        serviceId: data.serviceId || null,
         supplierId: data.supplierId || null,
         budgetItemId: data.budgetItemId || null,
         createdById: session.user.id as string,
         date: new Date(data.date),
         description: data.description,
         category: data.category,
+        quantity: data.quantity ?? null,
+        unit: data.unit ?? null,
+        unitValue: data.unitValue ?? null,
         plannedValue: data.plannedValue || null,
-        realizedValue: data.realizedValue,
+        realizedValue,
         paymentMethod: data.paymentMethod || null,
         invoiceNumber: data.invoiceNumber || null,
         status: data.status,
@@ -111,6 +128,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       include: {
         stage: { select: { id: true, name: true } },
+        service: { select: { id: true, name: true } },
         supplier: { select: { id: true, companyName: true } },
         createdBy: { select: { id: true, name: true } },
       },

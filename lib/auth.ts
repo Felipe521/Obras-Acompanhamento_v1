@@ -5,6 +5,7 @@ import bcryptjs from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { authConfig } from '@/lib/auth.config'
+import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -24,6 +25,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         try {
           const { email, password } = loginSchema.parse(credentials)
+
+          if (!checkRateLimit(email.toLowerCase())) {
+            return null
+          }
 
           const user = await prisma.user.findUnique({
             where: { email },
@@ -45,6 +50,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const isValid = await bcryptjs.compare(password, user.passwordHash)
           if (!isValid) return null
+
+          resetRateLimit(email.toLowerCase())
 
           return {
             id: user.id,

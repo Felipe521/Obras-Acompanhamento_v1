@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       include: {
         project: { select: { id: true, name: true, code: true } },
         stage: { select: { id: true, name: true } },
+        service: { select: { id: true, name: true } },
         supplier: { select: { id: true, companyName: true, tradeName: true } },
         createdBy: { select: { id: true, name: true } },
       },

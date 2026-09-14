@@ -151,18 +151,19 @@ function LoginContent() {
               </Button>
             </form>
 
-            {/* Demo credentials hint */}
-            <div className="mt-6 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
-              <p className="text-xs text-slate-400 font-medium mb-1.5">Credenciais de demonstração:</p>
-              <div className="space-y-0.5 text-xs text-slate-500">
-                <p>
-                  <span className="text-slate-400">Admin:</span> admin@obracontrol.com.br / Admin@123
-                </p>
-                <p>
-                  <span className="text-slate-400">Gestor:</span> gestor@obracontrol.com.br / Gestor@123
-                </p>
+            {process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === 'true' && (
+              <div className="mt-6 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                <p className="text-xs text-slate-400 font-medium mb-1.5">Credenciais de demonstração:</p>
+                <div className="space-y-0.5 text-xs text-slate-500">
+                  <p>
+                    <span className="text-slate-400">Admin:</span> admin@obracontrol.com.br / Admin@123
+                  </p>
+                  <p>
+                    <span className="text-slate-400">Gestor:</span> gestor@obracontrol.com.br / Gestor@123
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 

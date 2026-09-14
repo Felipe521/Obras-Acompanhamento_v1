@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -77,6 +78,11 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
   const pathname = usePathname()
   const breadcrumbs = generateBreadcrumbs(pathname)
 
+  // next-themes só resolve o tema real no cliente; renderizar o mesmo ícone
+  // do servidor até montar evita mismatch de hidratação no ícone sol/lua.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   async function handleSignOut() {
     // Agora isso aciona a Server Action que tem permissão absoluta
     // para destruir o cookie de sessão do servidor e forçar o redirecionamento.
@@ -120,7 +126,7 @@ export function Header({ sidebarCollapsed }: HeaderProps) {
           size="icon"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </Button>
 
         {/* Notifications */}
