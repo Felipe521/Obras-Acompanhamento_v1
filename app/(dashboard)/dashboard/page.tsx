@@ -115,10 +115,10 @@ async function getDashboardData(userId: string, role: string) {
 }
 
 export default async function DashboardPage() {
-  try {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
+  try {
   const data = await getDashboardData(session.user.id as string, session.user.role as string)
   const balance = data.totalBudget - data.totalSpent
   const percentUsed = data.totalBudget > 0 ? (data.totalSpent / data.totalBudget) * 100 : 0
