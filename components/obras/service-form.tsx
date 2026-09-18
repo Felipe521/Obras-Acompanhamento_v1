@@ -98,10 +98,10 @@ export function ServiceForm({ stageId, service, onSuccess, onCancel }: ServiceFo
         throw new Error(err.error || 'Erro')
       }
 
-      toast.success(service ? 'Subtópico atualizado!' : 'Subtópico criado!')
+      toast.success(service ? 'Subetapa atualizada!' : 'Subetapa criada!')
       onSuccess()
     } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar subtópico')
+      toast.error(e.message || 'Erro ao salvar subetapa')
     } finally {
       setIsLoading(false)
     }
@@ -181,7 +181,7 @@ export function ServiceForm({ stageId, service, onSuccess, onCancel }: ServiceFo
 
       <div className="space-y-1.5">
         <Label>Descrição</Label>
-        <Textarea placeholder="Descrição do subtópico..." rows={2} {...register('description')} />
+        <Textarea placeholder="Descrição da subetapa..." rows={2} {...register('description')} />
       </div>
 
       <div className="space-y-1.5">
@@ -194,7 +194,7 @@ export function ServiceForm({ stageId, service, onSuccess, onCancel }: ServiceFo
           Cancelar
         </Button>
         <Button type="submit" disabled={isLoading}>
-          {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : service ? 'Salvar' : 'Criar subtópico'}
+          {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</> : service ? 'Salvar' : 'Criar subetapa'}
         </Button>
       </div>
     </form>

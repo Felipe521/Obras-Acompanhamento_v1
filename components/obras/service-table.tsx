@@ -18,7 +18,7 @@ interface ServiceTableProps {
 }
 
 /**
- * Tabela hierárquica de subtópicos (numerada 1, 2, 3...), no padrão de
+ * Tabela hierárquica de subetapas (numerada 1, 2, 3...), no padrão de
  * orçamento por etapa — nome, quantidade, valores e progresso em colunas,
  * com uma linha de totais ao final.
  */
@@ -34,7 +34,7 @@ export function ServiceTable({ stageOrder, services, canEdit, onEdit, onDelete, 
         <thead>
           <tr className="bg-muted/50 border-b border-border">
             <th className="text-left p-2 pl-3 font-medium text-muted-foreground w-10">#</th>
-            <th className="text-left p-2 font-medium text-muted-foreground">Subtópico</th>
+            <th className="text-left p-2 font-medium text-muted-foreground">Subetapa</th>
             <th className="text-right p-2 font-medium text-muted-foreground whitespace-nowrap">Qtd. (prev/exec)</th>
             <th className="text-right p-2 font-medium text-muted-foreground whitespace-nowrap">Valor unit.</th>
             <th className="text-right p-2 font-medium text-muted-foreground whitespace-nowrap">Valor total</th>
@@ -105,7 +105,7 @@ export function ServiceTable({ stageOrder, services, canEdit, onEdit, onDelete, 
         </tbody>
         <tfoot>
           <tr className="bg-muted/40 font-semibold">
-            <td className="p-2 pl-3" colSpan={2}>Total ({services.length} subtópico{services.length !== 1 ? 's' : ''})</td>
+            <td className="p-2 pl-3" colSpan={2}>Total ({services.length} subetapa{services.length !== 1 ? 's' : ''})</td>
             <td />
             <td />
             <td className="p-2 text-right tabular-nums">{formatCurrency(totalValue)}</td>

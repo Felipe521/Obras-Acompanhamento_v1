@@ -33,7 +33,7 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
       if (!res.ok) throw new Error()
       setServices(await res.json())
     } catch {
-      toast.error('Erro ao carregar subtópicos')
+      toast.error('Erro ao carregar subetapas')
     } finally {
       setLoading(false)
     }
@@ -49,11 +49,11 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
     try {
       const res = await fetch(`/api/services/${deleteId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      toast.success('Subtópico excluído com sucesso')
+      toast.success('Subetapa excluída com sucesso')
       setDeleteId(null)
       await fetchServices()
     } catch {
-      toast.error('Erro ao excluir subtópico')
+      toast.error('Erro ao excluir subetapa')
     } finally {
       setDeleting(false)
     }
@@ -62,18 +62,21 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
   async function moveService(index: number, direction: -1 | 1) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= services.length) return
-    const a = services[index]
-    const b = services[targetIndex]
+    // Reatribui a ordem sequencial de toda a lista (não só troca dois valores) —
+    // isso também corrige de vez subetapas antigas que empatavam no mesmo número.
+    const reordered = [...services]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
     try {
       const res = await fetch(`/api/stages/${stageId}/services/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [{ id: a.id, order: b.order }, { id: b.id, order: a.order }] }),
+        body: JSON.stringify({ items: reordered.map((s, i) => ({ id: s.id, order: i })) }),
       })
       if (!res.ok) throw new Error()
       await fetchServices()
     } catch {
-      toast.error('Erro ao reordenar subtópicos')
+      toast.error('Erro ao reordenar subetapas')
     }
   }
 
@@ -82,7 +85,7 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
       <EmptyState
         icon={Layers}
         title="Nenhuma etapa cadastrada"
-        description="Crie etapas na aba 'Etapas' antes de adicionar subtópicos."
+        description="Crie etapas na aba 'Etapas' antes de adicionar subetapas."
       />
     )
   }
@@ -103,7 +106,7 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
         {canEdit && stageId && (
           <Button size="sm" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Novo subtópico
+            Nova subetapa
           </Button>
         )}
       </div>
@@ -115,12 +118,12 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
       ) : services.length === 0 ? (
         <EmptyState
           icon={Layers}
-          title="Nenhum subtópico cadastrado"
-          description="Divida esta etapa em subtópicos para acompanhar o progresso em detalhe."
+          title="Nenhuma subetapa cadastrada"
+          description="Divida esta etapa em subetapas para acompanhar o progresso em detalhe."
           action={canEdit ? (
             <Button size="sm" onClick={() => setShowForm(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Novo subtópico
+              Nova subetapa
             </Button>
           ) : undefined}
         />
@@ -145,7 +148,7 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
       >
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editService ? 'Editar subtópico' : 'Novo subtópico'}</DialogTitle>
+            <DialogTitle>{editService ? 'Editar subetapa' : 'Nova subetapa'}</DialogTitle>
           </DialogHeader>
           <ServiceForm
             stageId={stageId}
@@ -166,8 +169,8 @@ export function ServicesTab({ stages, canEdit }: ServicesTabProps) {
       <ConfirmDialog
         open={!!deleteId}
         onOpenChange={(open) => !open && setDeleteId(null)}
-        title="Excluir subtópico?"
-        description="Esta ação removerá o subtópico. O progresso da etapa será recalculado. Não pode ser desfeita."
+        title="Excluir subetapa?"
+        description="Esta ação removerá a subetapa. O progresso da etapa será recalculado. Não pode ser desfeita."
         confirmLabel="Excluir"
         onConfirm={handleDelete}
         loading={deleting}

@@ -207,11 +207,11 @@ export function ExpenseForm({ expense, defaultProjectId, onSuccess, onCancel }: 
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Subtópico</Label>
+          <Label>Subetapa</Label>
           <Select value={watch('serviceId') || 'none'} onValueChange={(v) => setValue('serviceId', v === 'none' ? '' : v)} disabled={!stageId || services.length === 0}>
-            <SelectTrigger><SelectValue placeholder="Sem subtópico" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Sem subetapa" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Sem subtópico</SelectItem>
+              <SelectItem value="none">Sem subetapa</SelectItem>
               {services.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>

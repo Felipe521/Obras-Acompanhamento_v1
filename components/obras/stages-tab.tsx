@@ -66,11 +66,11 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
     try {
       const res = await fetch(`/api/services/${deleteServiceId.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      toast.success('Subtópico excluído com sucesso')
+      toast.success('Subetapa excluída com sucesso')
       setDeleteServiceId(null)
       await fetchStages()
     } catch {
-      toast.error('Erro ao excluir subtópico')
+      toast.error('Erro ao excluir subetapa')
     } finally {
       setDeletingService(false)
     }
@@ -81,18 +81,21 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
     const targetIndex = index + direction
     if (targetIndex < 0 || targetIndex >= services.length) return
 
-    const a = services[index]
-    const b = services[targetIndex]
+    // Reatribui a ordem sequencial de toda a lista (não só troca dois valores) —
+    // isso também corrige de vez subetapas antigas que empatavam no mesmo número.
+    const reordered = [...services]
+    const [moved] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, moved)
     try {
       const res = await fetch(`/api/stages/${stage.id}/services/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [{ id: a.id, order: b.order }, { id: b.id, order: a.order }] }),
+        body: JSON.stringify({ items: reordered.map((s: any, i: number) => ({ id: s.id, order: i })) }),
       })
       if (!res.ok) throw new Error()
       await fetchStages()
     } catch {
-      toast.error('Erro ao reordenar subtópicos')
+      toast.error('Erro ao reordenar subetapas')
     }
   }
 
@@ -218,12 +221,12 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
                         )}
                       </div>
 
-                      {/* Expanded: subtópicos (services) */}
+                      {/* Expanded: subetapas (services) */}
                       {isExpanded && (
                         <div className="mt-3 border-t border-border pt-3">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-xs font-medium text-muted-foreground">
-                              Subtópicos ({sortedServices.length})
+                              Subetapas ({sortedServices.length})
                             </p>
                             {canEdit && (
                               <Button
@@ -233,13 +236,13 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
                                 onClick={() => setServiceFormStageId(stage.id)}
                               >
                                 <Plus className="w-3 h-3 mr-1" />
-                                Subtópico
+                                Subetapa
                               </Button>
                             )}
                           </div>
 
                           {sortedServices.length === 0 ? (
-                            <p className="text-xs text-muted-foreground py-2">Nenhum subtópico cadastrado.</p>
+                            <p className="text-xs text-muted-foreground py-2">Nenhuma subetapa cadastrada.</p>
                           ) : (
                             <ServiceTable
                               stageOrder={stage.order || stages.indexOf(stage) + 1}
@@ -291,7 +294,7 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Service (subtópico) Dialog */}
+      {/* Create/Edit Service (subetapa) Dialog */}
       <Dialog
         open={!!serviceFormStageId || !!editService}
         onOpenChange={(open) => {
@@ -303,7 +306,7 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
       >
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editService ? 'Editar subtópico' : 'Novo subtópico'}</DialogTitle>
+            <DialogTitle>{editService ? 'Editar subetapa' : 'Nova subetapa'}</DialogTitle>
           </DialogHeader>
           <ServiceForm
             stageId={editService?.stageId || serviceFormStageId || ''}
@@ -326,7 +329,7 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
         open={!!deleteId}
         onOpenChange={(open) => !open && setDeleteId(null)}
         title="Excluir etapa?"
-        description="Esta ação removerá a etapa e todos os seus subtópicos. Não pode ser desfeita."
+        description="Esta ação removerá a etapa e todos os seus subetapas. Não pode ser desfeita."
         confirmLabel="Excluir"
         onConfirm={handleDelete}
         loading={deleting}
@@ -336,8 +339,8 @@ export function StagesTab({ project, canEdit }: StagesTabProps) {
       <ConfirmDialog
         open={!!deleteServiceId}
         onOpenChange={(open) => !open && setDeleteServiceId(null)}
-        title="Excluir subtópico?"
-        description="Esta ação removerá o subtópico. O progresso da etapa será recalculado. Não pode ser desfeita."
+        title="Excluir subetapa?"
+        description="Esta ação removerá a subetapa. O progresso da etapa será recalculado. Não pode ser desfeita."
         confirmLabel="Excluir"
         onConfirm={handleDeleteService}
         loading={deletingService}

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: { stageId: str
 
   const services = await prisma.service.findMany({
     where: { stageId: params.stageId, deletedAt: null },
-    orderBy: { order: 'asc' },
+    orderBy: [{ order: 'asc' }, { id: 'asc' }],
   })
 
   return NextResponse.json(services)

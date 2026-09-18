@@ -14,7 +14,8 @@ import { ProgressBar } from '@/components/common/progress-bar'
 import { MetricCard } from '@/components/common/metric-card'
 import { StagesTab } from '@/components/obras/stages-tab'
 import { ServicesTab } from '@/components/obras/services-tab'
-import { GanttChart, type GanttTask } from '@/components/schedule/gantt-chart'
+import { ServiceForm } from '@/components/obras/service-form'
+import { GanttChart, type GanttTask, type GanttService } from '@/components/schedule/gantt-chart'
 import { TaskForm } from '@/components/schedule/task-form'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ProjectForm } from '@/components/obras/project-form'
@@ -40,6 +41,8 @@ export function ProjectDetailClient({
   const [ganttStages, setGanttStages] = useState<any[]>(project.stages || [])
   const [taskForm, setTaskForm] = useState<{ stageId: string } | null>(null)
   const [editTask, setEditTask] = useState<{ task: GanttTask; stageId: string } | null>(null)
+  const [serviceForm, setServiceForm] = useState<{ stageId: string } | null>(null)
+  const [editService, setEditService] = useState<{ service: any; stageId: string } | null>(null)
 
   async function refetchGantt() {
     try {
@@ -63,6 +66,37 @@ export function ProjectDetailClient({
       await refetchGantt()
     } catch (e: any) {
       toast.error(e.message || 'Erro ao reagendar atividade')
+    }
+  }
+
+  async function handleServiceReschedule(serviceId: string, startDate: Date, endDate: Date) {
+    try {
+      const res = await fetch(`/api/services/${serviceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plannedStartDate: startDate.toISOString(), plannedEndDate: endDate.toISOString() }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro')
+      }
+      toast.success('Subetapa reagendada')
+      await refetchGantt()
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao reagendar subetapa')
+    }
+  }
+
+  // Busca o registro completo da subetapa antes de editar — os campos do
+  // Gantt são resumidos e não devem preencher o formulário, senão salvar
+  // apagaria qtd/preço/observações reais já cadastrados.
+  async function openEditService(service: GanttService, stageId: string) {
+    try {
+      const res = await fetch(`/api/services/${service.id}`)
+      if (!res.ok) throw new Error()
+      setEditService({ service: await res.json(), stageId })
+    } catch {
+      toast.error('Erro ao carregar subetapa')
     }
   }
 
@@ -209,7 +243,7 @@ export function ProjectDetailClient({
           {[
             { value: 'visao-geral', label: 'Visão geral' },
             { value: 'etapas', label: 'Etapas' },
-            { value: 'servicos', label: 'Serviços' },
+            { value: 'servicos', label: 'Subetapas' },
             { value: 'cronograma', label: 'Cronograma' },
             { value: 'custos', label: 'Custos' },
             { value: 'medicoes', label: 'Medições' },
@@ -285,16 +319,26 @@ export function ProjectDetailClient({
 
         <TabsContent value="cronograma" className="mt-4">
           <Card>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base">Cronograma</CardTitle>
               {canEdit && (
-                <Button
-                  size="sm"
-                  onClick={() => setTaskForm({ stageId: ganttStages[0]?.id || '' })}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nova atividade
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setServiceForm({ stageId: ganttStages[0]?.id || '' })}
+                  >
+                    <Layers className="w-4 h-4 mr-2" />
+                    Nova subetapa
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setTaskForm({ stageId: ganttStages[0]?.id || '' })}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova atividade
+                  </Button>
+                </div>
               )}
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -304,6 +348,9 @@ export function ProjectDetailClient({
                 onTaskReschedule={handleReschedule}
                 onAddTask={(stageId) => setTaskForm({ stageId })}
                 onTaskClick={(task, stage) => setEditTask({ task, stageId: stage.id })}
+                onAddService={(stageId) => setServiceForm({ stageId })}
+                onServiceClick={(service, stage) => openEditService(service, stage.id)}
+                onServiceReschedule={handleServiceReschedule}
               />
             </CardContent>
           </Card>
@@ -371,6 +418,30 @@ export function ProjectDetailClient({
                 refetchGantt()
               }}
               onCancel={() => setEditTask(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* New/Edit Subetapa Dialog (Cronograma tab) */}
+      <Dialog open={!!serviceForm || !!editService} onOpenChange={(open) => { if (!open) { setServiceForm(null); setEditService(null) } }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editService ? 'Editar subetapa' : 'Nova subetapa'}</DialogTitle>
+          </DialogHeader>
+          {(serviceForm || editService) && (
+            <ServiceForm
+              stageId={editService?.stageId || serviceForm?.stageId || ''}
+              service={editService?.service}
+              onSuccess={() => {
+                setServiceForm(null)
+                setEditService(null)
+                refetchGantt()
+              }}
+              onCancel={() => {
+                setServiceForm(null)
+                setEditService(null)
+              }}
             />
           )}
         </DialogContent>

@@ -32,14 +32,17 @@ export async function GET(req: NextRequest) {
         services: includeTasks
           ? {
               where: { deletedAt: null },
-              orderBy: { order: 'asc' },
-              select: { id: true, name: true, status: true, plannedQty: true, executedQty: true, unitPrice: true, progress: true },
+              orderBy: [{ order: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true, name: true, status: true, plannedQty: true, executedQty: true, unitPrice: true, progress: true,
+                plannedStartDate: true, plannedEndDate: true,
+              },
             }
           : false,
         tasks: includeTasks
           ? {
               where: { deletedAt: null },
-              orderBy: { order: 'asc' },
+              orderBy: [{ order: 'asc' }, { id: 'asc' }],
               select: {
                 id: true, title: true, status: true, priority: true, startDate: true, dueDate: true,
                 progress: true, serviceId: true, assignee: { select: { id: true, name: true, image: true } },
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
           : false,
         _count: { select: { services: { where: { deletedAt: null } }, tasks: { where: { deletedAt: null } } } },
       },
-      orderBy: [{ project: { name: 'asc' } }, { order: 'asc' }],
+      orderBy: [{ project: { name: 'asc' } }, { order: 'asc' }, { id: 'asc' }],
       take: 200,
     })
 

@@ -53,7 +53,7 @@ function generateBreadcrumbs(pathname: string) {
     configuracoes: 'Configurações',
     usuarios: 'Usuários',
     perfil: 'Perfil',
-    servicos: 'Serviços',
+    servicos: 'Subetapas',
   }
 
   if (segments[0] === 'dashboard') return [{ href: '/dashboard', label: 'Dashboard' }]
