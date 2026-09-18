@@ -47,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         service: { select: { id: true, name: true } },
         _count: { select: { comments: true, attachments: true } },
       },
-      orderBy: [{ status: 'asc' }, { order: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ status: 'asc' }, { order: 'asc' }, { id: 'asc' }],
     })
 
     return NextResponse.json(tasks)

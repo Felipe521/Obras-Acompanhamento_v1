@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Calendar, Layers, CheckSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/empty-state'
 import { STAGE_STATUS_HEX } from '@/lib/constants'
@@ -18,6 +18,15 @@ export interface GanttTask {
   assignee?: { id: string; name: string } | null
 }
 
+export interface GanttService {
+  id: string
+  name: string
+  status: string
+  plannedStartDate: string | null
+  plannedEndDate: string | null
+  progress: number | string
+}
+
 export interface GanttStage {
   id: string
   name: string
@@ -28,6 +37,7 @@ export interface GanttStage {
   actualProgress: number | string
   project?: { id: string; name: string; code: string } | null
   tasks: GanttTask[]
+  services?: GanttService[]
 }
 
 interface GanttChartProps {
@@ -37,37 +47,56 @@ interface GanttChartProps {
   onTaskClick?: (task: GanttTask, stage: GanttStage) => void
   onAddTask?: (stageId: string) => void
   onTaskReschedule?: (taskId: string, startDate: Date, dueDate: Date) => void | Promise<void>
+  onServiceClick?: (service: GanttService, stage: GanttStage) => void
+  onAddService?: (stageId: string) => void
+  onServiceReschedule?: (serviceId: string, startDate: Date, endDate: Date) => void | Promise<void>
 }
 
-function TaskBar({
-  task,
+/** Barra arrastável genérica — usada tanto para atividades (Task) quanto subetapas (Service). */
+function DateBar({
+  start,
+  end,
+  status,
+  label,
+  progress,
   range,
   editable,
   onReschedule,
   onClick,
 }: {
-  task: GanttTask
+  start: string | null
+  end: string | null
+  status: string
+  label: string
+  progress: number | string
   range: GanttDateRange
   editable: boolean
-  onReschedule?: (id: string, start: Date, end: Date) => void | Promise<void>
+  onReschedule?: (start: Date, end: Date) => void | Promise<void>
   onClick?: () => void
 }) {
   const [dragOffset, setDragOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
   const trackRef = useRef<HTMLDivElement>(null)
 
-  if (!task.startDate || !task.dueDate) {
+  if (!start || !end) {
     return (
-      <div className="flex-1 flex items-center">
-        <span className="text-xs text-muted-foreground italic">Sem datas definidas</span>
-      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!onClick}
+        className="flex-1 flex items-center text-left disabled:cursor-default"
+      >
+        <span className="text-xs text-muted-foreground italic hover:text-foreground transition-colors">
+          Sem datas definidas{onClick ? ' — clique para editar' : ''}
+        </span>
+      </button>
     )
   }
 
-  const effectiveStart = dragging ? addDays(task.startDate, dragOffset) : task.startDate
-  const effectiveEnd = dragging ? addDays(task.dueDate, dragOffset) : task.dueDate
+  const effectiveStart = dragging ? addDays(start, dragOffset) : start
+  const effectiveEnd = dragging ? addDays(end, dragOffset) : end
   const { leftPct, widthPct } = computeBarPosition(effectiveStart, effectiveEnd, range)
-  const color = STAGE_STATUS_HEX[task.status] || '#94a3b8'
+  const color = STAGE_STATUS_HEX[status] || '#94a3b8'
 
   function handleMouseDown(e: React.MouseEvent) {
     if (!editable) return
@@ -94,8 +123,8 @@ function TaskBar({
       const deltaDays = pixelsToDays(deltaPx, trackWidth, range.totalDays)
       setDragging(false)
       setDragOffset(0)
-      if (moved && deltaDays !== 0 && task.startDate && task.dueDate) {
-        onReschedule?.(task.id, addDays(task.startDate, deltaDays), addDays(task.dueDate, deltaDays))
+      if (moved && deltaDays !== 0 && start && end) {
+        onReschedule?.(addDays(start, deltaDays), addDays(end, deltaDays))
       } else if (!moved) {
         onClick?.()
       }
@@ -116,9 +145,9 @@ function TaskBar({
           cursor: editable ? (dragging ? 'grabbing' : 'grab') : 'pointer',
         }}
         onMouseDown={handleMouseDown}
-        title={`${task.title} (${Number(task.progress).toFixed(0)}%)`}
+        title={`${label} (${Number(progress).toFixed(0)}%)`}
       >
-        <span className="text-[10px] text-white font-medium truncate drop-shadow">{task.title}</span>
+        <span className="text-[10px] text-white font-medium truncate drop-shadow">{label}</span>
       </div>
     </div>
   )
@@ -131,6 +160,9 @@ export function GanttChart({
   onTaskClick,
   onAddTask,
   onTaskReschedule,
+  onServiceClick,
+  onAddService,
+  onServiceReschedule,
 }: GanttChartProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -138,6 +170,7 @@ export function GanttChart({
     const items = stages.flatMap((s) => [
       { start: s.plannedStartDate, end: s.plannedEndDate },
       ...s.tasks.map((t) => ({ start: t.startDate, end: t.dueDate })),
+      ...(s.services || []).map((sv) => ({ start: sv.plannedStartDate, end: sv.plannedEndDate })),
     ])
     return computeDateRange(items)
   }, [stages])
@@ -147,7 +180,7 @@ export function GanttChart({
       <EmptyState
         icon={Calendar}
         title="Sem dados no cronograma"
-        description="Adicione datas nas etapas ou atividades para visualizar o Gantt."
+        description="Adicione datas nas etapas, subetapas ou atividades para visualizar o Gantt."
       />
     )
   }
@@ -158,8 +191,13 @@ export function GanttChart({
     ? ((now - range.minDate.getTime()) / (1000 * 60 * 60 * 24) / range.totalDays) * 100
     : null
 
+  // Cada mês precisa de espaço mínimo em pixels para o rótulo não sobrepor o
+  // vizinho — com muitos meses no intervalo, a área rolável cresce em vez de
+  // espremer tudo num container de largura fixa (era a causa da sobreposição).
+  const timelineWidthPx = Math.max(760, 208 + months.length * 100)
+
   return (
-    <div className="min-w-[760px]">
+    <div style={{ minWidth: `${timelineWidthPx}px` }}>
       {/* Month headers */}
       <div className="flex items-center h-7 mb-2 relative ml-52">
         {months.map((m, i) => (
@@ -183,6 +221,7 @@ export function GanttChart({
           const stagePos = stage.plannedStartDate && stage.plannedEndDate
             ? computeBarPosition(stage.plannedStartDate, stage.plannedEndDate, range)
             : null
+          const services = stage.services || []
 
           return (
             <div key={stage.id}>
@@ -218,6 +257,17 @@ export function GanttChart({
                     />
                   )}
                 </div>
+                {editable && onAddService && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 flex-shrink-0"
+                    onClick={() => onAddService(stage.id)}
+                    title="Nova subetapa nesta etapa"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                  </Button>
+                )}
                 {editable && onAddTask && (
                   <Button
                     variant="ghost"
@@ -231,27 +281,56 @@ export function GanttChart({
                 )}
               </div>
 
+              {/* Subetapa (Service) rows */}
+              {!isCollapsed &&
+                services.map((svc) => (
+                  <div key={`svc-${svc.id}`} className="flex items-center gap-2 h-8 pl-4">
+                    <div className="w-48 flex-shrink-0 pr-2 flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <p className="text-xs truncate">{svc.name}</p>
+                    </div>
+                    <DateBar
+                      start={svc.plannedStartDate}
+                      end={svc.plannedEndDate}
+                      status={svc.status}
+                      label={svc.name}
+                      progress={svc.progress}
+                      range={range}
+                      editable={editable}
+                      onReschedule={(start, end) => onServiceReschedule?.(svc.id, start, end)}
+                      onClick={() => onServiceClick?.(svc, stage)}
+                    />
+                  </div>
+                ))}
+
               {/* Task rows */}
               {!isCollapsed &&
                 stage.tasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-2 h-8 pl-4">
-                    <div className="w-48 flex-shrink-0 pr-2">
-                      <p className="text-xs truncate">{task.title}</p>
-                      {task.assignee && <p className="text-[10px] text-muted-foreground truncate">{task.assignee.name}</p>}
+                  <div key={`task-${task.id}`} className="flex items-center gap-2 h-8 pl-4">
+                    <div className="w-48 flex-shrink-0 pr-2 flex items-center gap-1">
+                      <CheckSquare className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs truncate">{task.title}</p>
+                        {task.assignee && <p className="text-[10px] text-muted-foreground truncate">{task.assignee.name}</p>}
+                      </div>
                     </div>
-                    <TaskBar
-                      task={task}
+                    <DateBar
+                      start={task.startDate}
+                      end={task.dueDate}
+                      status={task.status}
+                      label={task.title}
+                      progress={task.progress}
                       range={range}
                       editable={editable}
-                      onReschedule={onTaskReschedule}
+                      onReschedule={(start, end) => onTaskReschedule?.(task.id, start, end)}
                       onClick={() => onTaskClick?.(task, stage)}
                     />
                   </div>
                 ))}
 
-              {!isCollapsed && stage.tasks.length === 0 && (
+              {!isCollapsed && services.length === 0 && stage.tasks.length === 0 && (
                 <div className="flex items-center h-6 pl-4">
-                  <span className="text-[11px] text-muted-foreground pl-2">Nenhuma atividade nesta etapa</span>
+                  <span className="text-[11px] text-muted-foreground pl-2">Nenhuma subetapa ou atividade nesta etapa</span>
                 </div>
               )}
             </div>

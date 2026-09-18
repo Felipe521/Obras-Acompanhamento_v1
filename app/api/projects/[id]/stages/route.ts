@@ -32,12 +32,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         responsible: { select: { id: true, name: true, image: true } },
         services: {
           where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+          orderBy: [{ order: 'asc' }, { id: 'asc' }],
           select: { id: true, name: true, status: true, plannedQty: true, executedQty: true, unitPrice: true, progress: true, unit: true },
         },
         _count: { select: { tasks: { where: { deletedAt: null } } } },
       },
-      orderBy: { order: 'asc' },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
     })
 
     // Progresso/status calculados a partir dos subtópicos (não persistido aqui — GET é somente leitura)

@@ -86,8 +86,8 @@ export default async function ObraPage({ params }: Props) {
   const totalSpent = Number(expenses._sum.realizedValue || 0)
   const totalBudget = Number(project.totalBudget || budgetItems._sum.plannedValue || 0)
 
-  // Progresso/status calculados a partir dos subtópicos (não persistido no GET —
-  // a persistência acontece ao criar/editar/excluir um subtópico, ver lib/stage-progress.ts)
+  // Progresso/status calculados a partir dos subetapas (não persistido no GET —
+  // a persistência acontece ao criar/editar/excluir um subetapa, ver lib/stage-progress.ts)
   const stages = project.stages.map((stage) => {
     const actualProgress = stage.services.length > 0
       ? computeStageActualProgress(stage.services)

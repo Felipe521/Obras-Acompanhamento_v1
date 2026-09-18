@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus } from 'lucide-react'
+import { Plus, Layers } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { GanttChart, type GanttStage, type GanttTask } from '@/components/schedule/gantt-chart'
+import { GanttChart, type GanttStage, type GanttTask, type GanttService } from '@/components/schedule/gantt-chart'
 import { TaskForm } from '@/components/schedule/task-form'
+import { ServiceForm } from '@/components/obras/service-form'
 import { toast } from 'sonner'
 
 export default function CronogramaPage() {
@@ -18,6 +19,9 @@ export default function CronogramaPage() {
   const [projectFilter, setProjectFilter] = useState('all')
   const [taskForm, setTaskForm] = useState<{ projectId: string; stageId: string } | null>(null)
   const [editTask, setEditTask] = useState<{ task: GanttTask; projectId: string; stageId: string } | null>(null)
+  const [serviceForm, setServiceForm] = useState<{ stageId: string } | null>(null)
+  const [editService, setEditService] = useState<{ service: any; stageId: string } | null>(null)
+  const [loadingService, setLoadingService] = useState(false)
 
   const canEdit = ['ADMIN', 'GESTOR', 'RESPONSAVEL'].includes((session?.user as any)?.role || '')
 
@@ -59,15 +63,49 @@ export default function CronogramaPage() {
     }
   }
 
+  async function handleServiceReschedule(serviceId: string, startDate: Date, endDate: Date) {
+    try {
+      const res = await fetch(`/api/services/${serviceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plannedStartDate: startDate.toISOString(), plannedEndDate: endDate.toISOString() }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro')
+      }
+      toast.success('Subetapa reagendada')
+      await fetchStages()
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao reagendar subetapa')
+    }
+  }
+
   const projectStages = (projectId: string) =>
     stages.filter((s: any) => s.project.id === projectId).map((s) => ({ id: s.id, name: s.name }))
+
+  // Busca o registro completo da subetapa antes de editar — os campos do
+  // Gantt são resumidos (nome/status/datas/progresso) e não devem ser usados
+  // para preencher o formulário, senão salvar apagaria qtd/preço/observações reais.
+  async function openEditService(service: GanttService, stageId: string) {
+    setLoadingService(true)
+    try {
+      const res = await fetch(`/api/services/${service.id}`)
+      if (!res.ok) throw new Error()
+      setEditService({ service: await res.json(), stageId })
+    } catch {
+      toast.error('Erro ao carregar subetapa')
+    } finally {
+      setLoadingService(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Cronograma</h1>
-          <p className="text-muted-foreground text-sm">Etapas e atividades — arraste uma atividade para reagendar</p>
+          <p className="text-muted-foreground text-sm">Etapas, subetapas e atividades — arraste uma barra para reagendar</p>
         </div>
         <Select value={projectFilter} onValueChange={setProjectFilter}>
           <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
@@ -82,18 +120,28 @@ export default function CronogramaPage() {
         <div className="h-80 rounded-xl bg-muted animate-pulse" />
       ) : (
         <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base">
               Gantt — {filtered.length} etapa{filtered.length !== 1 ? 's' : ''}
             </CardTitle>
             {canEdit && projectFilter !== 'all' && (
-              <Button
-                size="sm"
-                onClick={() => setTaskForm({ projectId: projectFilter, stageId: projectStages(projectFilter)[0]?.id || '' })}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nova atividade
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setServiceForm({ stageId: projectStages(projectFilter)[0]?.id || '' })}
+                >
+                  <Layers className="w-4 h-4 mr-2" />
+                  Nova subetapa
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setTaskForm({ projectId: projectFilter, stageId: projectStages(projectFilter)[0]?.id || '' })}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova atividade
+                </Button>
+              </div>
             )}
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -107,6 +155,9 @@ export default function CronogramaPage() {
                 if (stage) setTaskForm({ projectId: stage.project.id, stageId })
               }}
               onTaskClick={(task, stage: any) => setEditTask({ task, projectId: stage.project.id, stageId: stage.id })}
+              onAddService={(stageId) => setServiceForm({ stageId })}
+              onServiceClick={(service, stage: any) => openEditService(service, stage.id)}
+              onServiceReschedule={handleServiceReschedule}
             />
           </CardContent>
         </Card>
@@ -147,6 +198,29 @@ export default function CronogramaPage() {
                 fetchStages()
               }}
               onCancel={() => setEditTask(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!serviceForm || !!editService} onOpenChange={(open) => { if (!open) { setServiceForm(null); setEditService(null) } }}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editService ? 'Editar subetapa' : 'Nova subetapa'}</DialogTitle>
+          </DialogHeader>
+          {(serviceForm || editService) && (
+            <ServiceForm
+              stageId={editService?.stageId || serviceForm?.stageId || ''}
+              service={editService?.service}
+              onSuccess={() => {
+                setServiceForm(null)
+                setEditService(null)
+                fetchStages()
+              }}
+              onCancel={() => {
+                setServiceForm(null)
+                setEditService(null)
+              }}
             />
           )}
         </DialogContent>

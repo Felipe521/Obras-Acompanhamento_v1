@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
             responsible: { select: { id: true, name: true } },
             _count: { select: { services: { where: { deletedAt: null } } } },
           },
-          orderBy: { order: 'asc' },
+          orderBy: [{ order: 'asc' }, { id: 'asc' }],
         },
         _count: {
           select: {
